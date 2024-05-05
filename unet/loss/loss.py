@@ -51,7 +51,7 @@ class DiceCELoss(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, inputs, targets, seg_weight, smooth=1):
+    def forward(self, inputs, targets, seg_weight, smooth=1e-15):
         new_inputs = inputs[seg_weight != 0]
         
         categorical_target = targets[0][seg_weight != 0]
@@ -79,7 +79,7 @@ class MultiClassesDiceBCELoss(nn.Module):
         targets = targets.long()
         return nn.CrossEntropyLoss()(inputs, targets)
 
-    def dice_score(self, input, target, classes, ignore_index=-100, smooth=1e-12):
+    def dice_score(self, input, target, classes, ignore_index=-100, smooth=1e-15):
         """ Functional dice score calculation on multiple classes. """
 
         target = target.long().unsqueeze(1)
@@ -115,7 +115,7 @@ class DiceBCELoss(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(DiceBCELoss, self).__init__()
 
-    def forward(self, inputs, targets, seg_weight, smooth=1):
+    def forward(self, inputs, targets, seg_weight, smooth=1e-15):
         # print(inputs.size(), targets.size())
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = torch.sigmoid(inputs)       

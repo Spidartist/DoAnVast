@@ -5,7 +5,7 @@ class DiceScore(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(DiceScore, self).__init__()
 
-    def forward(self, inputs, targets, seg_weight: torch.Tensor, smooth=1):
+    def forward(self, inputs, targets, seg_weight: torch.Tensor, smooth=1e-15):
         # print(inputs.size(), targets.size())
         #comment out if your model contains a sigmoid or equivalent activation layer
         # inputs = F.sigmoid(inputs)       
@@ -30,7 +30,7 @@ class IoUScore(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(IoUScore, self).__init__()
 
-    def forward(self, inputs, targets, smooth=1e-12):
+    def forward(self, inputs, targets, smooth=1e-15):
         
         #comment out if your model contains a sigmoid or equivalent activation layer
         # inputs = F.sigmoid(inputs)       
@@ -54,7 +54,7 @@ class MultiClassesDiceScore(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def dice_score(self, input, target, classes, ignore_index=-100, smooth=1e-12):
+    def dice_score(self, input, target, classes, ignore_index=-100, smooth=1e-15):
         """ Functional dice score calculation on multiple classes. """
 
         target = target.long().unsqueeze(1)
@@ -82,3 +82,24 @@ class MultiClassesDiceScore(nn.Module):
         targets = targets[seg_weight != 0]
 
         return torch.nansum((1 - self.dice_score(inputs, targets, classes)).mean())
+    
+def precision(y_true, y_pred):
+    intersection = (y_true * y_pred).sum()
+    return (intersection + 1e-15) / (y_pred.sum() + 1e-15)
+
+def recall(y_true, y_pred):
+    intersection = (y_true * y_pred).sum()
+    return (intersection + 1e-15) / (y_true.sum() + 1e-15)
+
+def F2(y_true, y_pred, beta=2):
+    p = precision(y_true,y_pred)
+    r = recall(y_true, y_pred)
+    return (1+beta**2.) *(p*r) / float(beta**2*p + r + 1e-15)
+
+def dice_score(y_true, y_pred):
+    return (2 * (y_true * y_pred).sum() + 1e-15) / (y_true.sum() + y_pred.sum() + 1e-15)
+
+def jac_score(y_true, y_pred):
+    intersection = (y_true * y_pred).sum()
+    union = y_true.sum() + y_pred.sum() - intersection
+    return (intersection + 1e-15) / (union + 1e-15)

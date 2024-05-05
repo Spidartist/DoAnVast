@@ -169,6 +169,9 @@ def train_and_val():
     if args.type == "pretrained":
         ckpt = torch.load("/mnt/quanhd/ijepa/logs/jepa-ep300.pth.tar")
         encoder.load_state_dict(ckpt["target_encoder"])
+    else:
+        ckpt = torch.load("/mnt/quanhd/ijepa/logs/jepa-ep300.pth.tar")
+        encoder.load_state_dict(ckpt["target_encoder"])
 
     net = UNETR(img_size=256, backbone="ijepa", encoder=encoder)
     net.train()

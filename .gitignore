@@ -1,2 +1,4 @@
 unet/logs
 unet/wandb
+unet/tmp*
+__pycache__/

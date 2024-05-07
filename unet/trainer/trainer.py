@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 class Trainer():
     def __init__(
             self, device, type_pretrained, type_damaged, json_path,
-            root_path, wandb_token, task="segmentation", type_seg="TonThuong"
+            root_path, wandb_token, task="segmentation", type_seg="TonThuong", type_cls="hp"
         ):
         self.device = device
         self.type_pretrained = type_pretrained
@@ -38,6 +38,7 @@ class Trainer():
 
         self.task = task
         self.type_seg = type_seg
+        self.type_cls = type_cls
         self.init_logger()
         self.init_data_loader()
         self.init_loss()
@@ -107,18 +108,27 @@ class Trainer():
         )
 
     def init_data_loader(self):
-        if self.type_seg == "TonThuong":
-            train_dataset = TonThuong(root_path=self.root_path, mode="train", type=self.type_damaged, img_size=self.img_size[0])
-            self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+        if self.task == "segmentation":
+            if self.type_seg == "TonThuong":
+                train_dataset = TonThuong(root_path=self.root_path, mode="train", type=self.type_damaged, img_size=self.img_size[0])
+                self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
 
-            valid_dataset = TonThuong(root_path=self.root_path, mode="test", type=self.type_damaged, img_size=self.img_size[0])
-            self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=True)
-        elif self.type_seg == "polyp":
-            train_dataset = Polyp(root_path=self.root_path, mode="train")
-            self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+                valid_dataset = TonThuong(root_path=self.root_path, mode="test", type=self.type_damaged, img_size=self.img_size[0])
+                self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
+            elif self.type_seg == "polyp":
+                train_dataset = Polyp(root_path=self.root_path, mode="train", img_size=self.img_size[0])
+                self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
 
-            valid_dataset = Polyp(root_path=self.root_path, mode="test")
-            self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=True)
+                valid_dataset = Polyp(root_path=self.root_path, mode="test", img_size=self.img_size[0])
+                self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
+            elif self.type_seg == "benchmark":
+                pass
+        elif self.task == "classification":
+            if self.type_cls == "hp":
+                pass
+            elif self.type_cls == "vitri":
+                pass
+
     def run(self):
         for _ in range(self.epoch_num):
             train_epoch_loss, train_epoch_score = self.train_one_epoch()

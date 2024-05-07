@@ -8,32 +8,35 @@ import cv2
 import numpy as np
 import torch
 
-class Polyp(Dataset):
+class Benchmark(Dataset):
     def __init__(
             self, 
-            path="/mnt/quanhd/endoscopy/polyp.json", 
+            path="/mnt/quanhd/endoscopy/public_dataset.json", 
             mode="train",
+            ds_test="CVC-300",
             img_size=256,
             root_path="home/s/DATA/"
         ):
         self.path = path
         self.img_size = img_size
         self.mode = mode
+        self.ds_test = ds_test
         self.root_path = root_path
         self.load_data_from_json()
-        # pprint(self.image_paths)
 
     def load_data_from_json(self):
         with open(self.path) as f:
             data = json.load(f)
-        self.image_paths = data[self.mode]["images"]
-        # print(len(self.image_paths))
-        self.mask_paths = data[self.mode]["masks"]
+        if self.mode == "train":
+            self.image_paths = data[self.mode]["images"]
+            self.mask_paths = data[self.mode]["masks"]
+        elif self.mode == "test":
+            self.image_paths = data[self.mode][self.ds_test]["images"]
+            self.mask_paths = data[self.mode][self.ds_test]["masks"]
     
     def aug(self, image, mask):
-        img_size = self.img_size
         if self.mode == 'train':
-            t1 = A.Compose([A.Resize(img_size, img_size),])
+            t1 = A.Compose([A.Resize(self.img_size, self.img_size),])
             resized = t1(image=image, mask=mask)
             image = resized['image']
             mask = resized['mask']
@@ -49,7 +52,7 @@ class Polyp(Dataset):
 
         elif self.mode == 'test':
             t = A.Compose([
-                A.Resize(img_size, img_size)
+                A.Resize(self.img_size, self.img_size)
             ])
 
         return t(image=image, mask=mask)
@@ -80,12 +83,3 @@ class Polyp(Dataset):
 
         return img, orin_mask
 
-
-
-        
-
-
-
-if __name__ == "__main__":
-    ds = Polyp()
-    print(ds.__len__())

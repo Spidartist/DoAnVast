@@ -1,10 +1,12 @@
 import wandb
 from dataset.TonThuong import TonThuong
+from dataset.Polyp import Polyp
 from loss.loss import DiceBCELoss
 from score.score import DiceScore
-from model.vit import vit_base
+from model.vit import vit_base, vit_huge
 from model.unetr import UNETR
 from utils.lr import get_warmup_cosine_lr
+from utils.helper import load_state_dict_wo_module
 
 import torch
 import torch.optim as optim
@@ -16,7 +18,7 @@ from torch.utils.data import DataLoader
 class Trainer():
     def __init__(
             self, device, type_pretrained, type_damaged, json_path,
-            root_path, wandb_token
+            root_path, wandb_token, task="segmentation", type_seg="TonThuong"
         ):
         self.device = device
         self.type_pretrained = type_pretrained
@@ -27,13 +29,15 @@ class Trainer():
         self.batch_size = 16
         self.BASE_LR = 1e-6
         self.MAX_LR = 1e-3
-        self.img_size = (256, 256)
+        self.img_size = (448, 448)
         self.epoch_num = 100
         self.save_freq = 1
         self.save_path = "/logs/"
         self.warmup_epochs = 2
         self.global_step = 0
 
+        self.task = task
+        self.type_seg = type_seg
         self.init_logger()
         self.init_data_loader()
         self.init_loss()
@@ -62,16 +66,19 @@ class Trainer():
 
 
     def init_model(self):
-        encoder = vit_base(img_size=[256])
         if self.type_pretrained == "endoscopy":
-            print(torch.cuda.is_available())
+            encoder = vit_base(img_size=[self.img_size[0]])
+            print(self.type_pretrained)
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300.pth.tar")
             encoder.load_state_dict(ckpt["target_encoder"])
         else:
-            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300.pth.tar")
-            encoder.load_state_dict(ckpt["target_encoder"])
+            encoder = vit_huge(img_size=[self.img_size[0]])
+            print(self.type_pretrained)
+            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/IN1K-vit.h.16-448px-300e.pth.tar")
+            new_state_dict = load_state_dict_wo_module(ckpt["target_encoder"])
+            encoder.load_state_dict(new_state_dict)
 
-        self.net = UNETR(img_size=256, backbone="ijepa", encoder=encoder)
+        self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder)
         self.net.to(self.device)
 
     def init_optim(self):
@@ -88,7 +95,7 @@ class Trainer():
     def init_logger(self):
         wandb.login(key=self.wandb_token)
         wandb.init(
-            project="TonThuong",
+            project=self.type_seg,
             name=f"{self.type_damaged}-{self.type_pretrained}",
             config={
                 "batch": self.batch_size,
@@ -100,12 +107,18 @@ class Trainer():
         )
 
     def init_data_loader(self):
-        train_dataset = TonThuong(root_path=self.root_path, mode="train", type=self.type_damaged)
-        self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+        if self.type_seg == "TonThuong":
+            train_dataset = TonThuong(root_path=self.root_path, mode="train", type=self.type_damaged, img_size=self.img_size[0])
+            self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
 
-        valid_dataset = TonThuong(root_path=self.root_path, mode="test", type=self.type_damaged)
-        self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=True)
+            valid_dataset = TonThuong(root_path=self.root_path, mode="test", type=self.type_damaged, img_size=self.img_size[0])
+            self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=True)
+        elif self.type_seg == "polyp":
+            train_dataset = Polyp(root_path=self.root_path, mode="train")
+            self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
 
+            valid_dataset = Polyp(root_path=self.root_path, mode="test")
+            self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=True)
     def run(self):
         for _ in range(self.epoch_num):
             train_epoch_loss, train_epoch_score = self.train_one_epoch()

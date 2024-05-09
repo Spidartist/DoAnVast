@@ -7,6 +7,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--type_pretrained', help='have pretrained on which data', default="endoscopy", type=str)
     parser.add_argument('--type_damaged', help='type of damaged', required=True, type=str)
+    parser.add_argument('--type_seg', help='type of segmentation', required=True, type=str)
     parser.add_argument('--json_path', help='path to json file', default="/mnt/quanhd/endoscopy/ft_ton_thuong.json", type=str)
     parser.add_argument('--root_path', help='path to root folder of data', default="/home/s/DATA/", type=str)
     parser.add_argument('--gpu', help='id of GPU', default="0", type=str)
@@ -25,7 +26,7 @@ def run():
 
     trainer = Trainer(
                 device=device, type_pretrained=args.type_pretrained, type_damaged=args.type_damaged,
-                json_path=args.json_path, root_path=args.root_path, wandb_token=WANDB_TOKEN,
+                json_path=args.json_path, root_path=args.root_path, wandb_token=WANDB_TOKEN, type_seg=args.type_seg
                 )
     
     trainer.run()

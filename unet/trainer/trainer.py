@@ -1,6 +1,7 @@
 import wandb
 from dataset.TonThuong import TonThuong
 from dataset.Polyp import Polyp
+from dataset.Benchmark import Benchmark
 from loss.loss import DiceBCELoss
 from score.score import DiceScore
 from model.vit import vit_base, vit_huge
@@ -26,10 +27,10 @@ class Trainer():
         self.json_path = json_path
         self.root_path = root_path
         self.wandb_token = wandb_token
-        self.batch_size = 16
+        self.batch_size = 16  # old = 16
         self.BASE_LR = 1e-6
         self.MAX_LR = 1e-3
-        self.img_size = (448, 448)
+        self.img_size = (256, 256)
         self.epoch_num = 100
         self.save_freq = 1
         self.save_path = "/logs/"
@@ -122,7 +123,30 @@ class Trainer():
                 valid_dataset = Polyp(root_path=self.root_path, mode="test", img_size=self.img_size[0])
                 self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
             elif self.type_seg == "benchmark":
-                pass
+                train_dataset = Benchmark(root_path=self.root_path, img_size=self.img_size[0])
+                self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+                
+                self.valid_data_loaders = {}
+                valid_dataset = Benchmark(root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="CVC-300")
+                valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
+                self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
+
+                valid_dataset = Benchmark(root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="Kvasir")
+                valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
+                self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
+
+                valid_dataset = Benchmark(root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="CVC-ClinicDB")
+                valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
+                self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
+
+                valid_dataset = Benchmark(root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="CVC-ColonDB")
+                valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
+                self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
+
+                valid_dataset = Benchmark(root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="ETIS-LaribPolypDB")
+                valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
+                self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
+
         elif self.task == "classification":
             if self.type_cls == "hp":
                 pass
@@ -130,19 +154,39 @@ class Trainer():
                 pass
 
     def run(self):
-        for _ in range(self.epoch_num):
+        for epoch in range(self.epoch_num):
             train_epoch_loss, train_epoch_score = self.train_one_epoch()
-            valid_epoch_loss, valid_epoch_score, vis_image = self.valid_one_epoch()
-
             wandb.log(
-                {
-                    "train_epoch_loss": train_epoch_loss,
-                    "train_epoch_score": train_epoch_score,
-                    "valid_epoch_loss": valid_epoch_loss,
-                    "valid_epoch_score": valid_epoch_score,
-                    "valid_image_visualize": vis_image
-                }
-            )
+                    {
+                        "train_epoch_loss": train_epoch_loss,
+                        "train_epoch_score": train_epoch_score,
+                    },
+                    step=epoch 
+                )
+            if self.type_seg != "benchmark":
+                valid_epoch_loss, valid_epoch_score, vis_image = self.valid_one_epoch()
+
+                wandb.log(
+                    {
+                        "valid_epoch_loss": valid_epoch_loss,
+                        "valid_epoch_score": valid_epoch_score,
+                        "valid_image_visualize": vis_image
+                    },
+                    step=epoch
+                )
+            else:
+                for type_test_ds in self.valid_data_loaders:
+                    self.valid_data_loader = self.valid_data_loaders[type_test_ds]
+                    valid_epoch_loss, valid_epoch_score, vis_image = self.valid_one_epoch()
+
+                    wandb.log(
+                        {
+                            f"{type_test_ds}_valid_epoch_loss": valid_epoch_loss,
+                            f"{type_test_ds}_valid_epoch_score": valid_epoch_score,
+                            f"{type_test_ds}_valid_image_visualize": vis_image
+                        },
+                        step=epoch
+                    )
 
     def train_one_epoch(self):
         steps_per_epoch = len(self.train_data_loader)

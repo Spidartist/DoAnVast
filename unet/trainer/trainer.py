@@ -3,11 +3,11 @@ from dataset.TonThuong import TonThuong
 from dataset.Polyp import Polyp
 from dataset.Benchmark import Benchmark
 from loss.loss import DiceBCELoss
-from score.score import DiceScore
+from score.score import DiceScore, IoUScore
 from model.vit import vit_base, vit_huge
 from model.unetr import UNETR
 from utils.lr import get_warmup_cosine_lr
-from utils.helper import load_state_dict_wo_module
+from utils.helper import load_state_dict_wo_module, AverageMeter
 
 import torch
 import torch.optim as optim
@@ -65,7 +65,7 @@ class Trainer():
 
     def init_score(self):
         self.dice_score = DiceScore().to(self.device)
-
+        self.iou_score = IoUScore().to(self.device)
 
     def init_model(self):
         if self.type_pretrained == "endoscopy":
@@ -155,21 +155,23 @@ class Trainer():
 
     def run(self):
         for epoch in range(self.epoch_num):
-            train_epoch_loss, train_epoch_score = self.train_one_epoch()
+            train_epoch_loss, train_epoch_dice_score, train_epoch_iou_score = self.train_one_epoch()
             wandb.log(
                     {
                         "train_epoch_loss": train_epoch_loss,
-                        "train_epoch_score": train_epoch_score,
+                        "train_epoch_dice_score": train_epoch_dice_score,
+                        "train_epoch_iou_score": train_epoch_iou_score
                     },
                     step=epoch 
                 )
             if self.type_seg != "benchmark":
-                valid_epoch_loss, valid_epoch_score, vis_image = self.valid_one_epoch()
+                valid_epoch_loss, valid_epoch_dice_score, valid_epoch_iou_score, vis_image = self.valid_one_epoch()
 
                 wandb.log(
                     {
                         "valid_epoch_loss": valid_epoch_loss,
-                        "valid_epoch_score": valid_epoch_score,
+                        "valid_epoch_dice_score": valid_epoch_dice_score,
+                        "valid_epoch_iou_score": valid_epoch_iou_score,
                         "valid_image_visualize": vis_image
                     },
                     step=epoch
@@ -182,7 +184,7 @@ class Trainer():
                     wandb.log(
                         {
                             f"{type_test_ds}_valid_epoch_loss": valid_epoch_loss,
-                            f"{type_test_ds}_valid_epoch_score": valid_epoch_score,
+                            f"{type_test_ds}_valid_epoch_dice_score": valid_epoch_score,
                             f"{type_test_ds}_valid_image_visualize": vis_image
                         },
                         step=epoch
@@ -192,8 +194,9 @@ class Trainer():
         steps_per_epoch = len(self.train_data_loader)
         total_steps = steps_per_epoch * self.epoch_num
         self.net.train()
-        epoch_loss = 0
-        epoch_dice_score = 0
+        epoch_loss = AverageMeter()
+        epoch_dice_score = AverageMeter()
+        epoch_iou_score = AverageMeter()
 
         tk0 = tqdm(self.train_data_loader, total=steps_per_epoch)
         for data in tk0:
@@ -210,7 +213,7 @@ class Trainer():
 
             loss3 = self.seg_loss(seg_out, mask, 1)
 
-            epoch_loss += loss3.item()
+            epoch_loss.update(loss3.item())
 
             self.optimizer.zero_grad()
             loss3.backward()
@@ -219,22 +222,25 @@ class Trainer():
             with torch.no_grad():
                 self.net.eval()
                 # score = dice_score(seg_out, mask[1], segment_weight)
-                score = self.dice_score(seg_out, mask, 1)
-                epoch_dice_score += score.item()
+                dice_score = self.dice_score(seg_out, mask, 1)
+                iou_score = self.iou_score(seg_out, mask, 1)
+                epoch_dice_score.update(dice_score.item())
+                epoch_iou_score.update(iou_score.item())
 
             # if global_step % self.save_freq == 0 or global_step == total_steps-1:
             #     torch.save(self.net.state_dict(), self.save_path + f'/model-{self.type_pretrained}-{self.type_damaged}-best.pt')
 
             self.global_step += 1
 
-        return epoch_loss/steps_per_epoch, epoch_dice_score/steps_per_epoch
+        return epoch_loss.avg, epoch_dice_score.avg, epoch_iou_score.avg
 
 
     def valid_one_epoch(self):
         steps_per_epoch = len(self.valid_data_loader)
         self.net.eval()
-        epoch_loss = 0
-        epoch_dice = 0
+        epoch_loss = AverageMeter()
+        epoch_dice_score = AverageMeter()
+        epoch_iou_score = AverageMeter()
 
         vis_image = None
 
@@ -250,11 +256,13 @@ class Trainer():
 
                 loss3 = self.seg_loss(seg_out, mask, 1)
 
-                epoch_loss += loss3.item()
+                epoch_loss.update(loss3.item())
 
-                score = self.dice_score(seg_out, mask, 1)
+                dice_score = self.dice_score(seg_out, mask, 1)
+                epoch_dice_score.update(dice_score.item())
 
-                epoch_dice += score.item()
+                iou_score = self.iou_score(seg_out, mask, 1)
+                epoch_iou_score.update(iou_score.item())
 
                 seg_img = seg_out[0]
                 seg_img[seg_img <= 0.5] = 0
@@ -268,6 +276,6 @@ class Trainer():
         #     print('Loss decreases from %f to %f, saving new best...' % (best_epoch_loss, epoch_loss))
         #     best_epoch_loss = epoch_loss
         #     torch.save(self.net.state_dict(), self.save_path + f'/model-{type}-{loai_ton_thuong}-best.pt')
-        return epoch_loss/steps_per_epoch , epoch_dice/steps_per_epoch, vis_image
+        return epoch_loss.avg , epoch_dice_score.avg, epoch_iou_score.avg, vis_image
 
     

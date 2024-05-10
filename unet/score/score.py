@@ -25,18 +25,25 @@ class DiceScore(nn.Module):
         dice = (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
         
         return torch.nansum(dice)
-
+    
 class IoUScore(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(IoUScore, self).__init__()
 
-    def forward(self, inputs, targets, smooth=1e-15):
+    def forward(self, inputs, targets, seg_weight: torch.Tensor, smooth=1e-15):
         
         #comment out if your model contains a sigmoid or equivalent activation layer
         # inputs = F.sigmoid(inputs)       
         
         #flatten label and prediction tensors
-        inputs = torch.flatten(inputs)
+        # inputs = torch.flatten(inputs)
+        # targets = torch.flatten(targets.float())
+        inputs = inputs[seg_weight != 0]
+        targets = targets[seg_weight != 0]
+
+        inputs = torch.sigmoid(torch.flatten(inputs))
+        inputs[inputs < 0.5] = 0
+        inputs[inputs >= 0.5] = 1
         targets = torch.flatten(targets.float())
         
         #intersection is equivalent to True Positive count
@@ -47,7 +54,30 @@ class IoUScore(nn.Module):
         
         IoU = (intersection + smooth)/(union + smooth)
                 
-        return IoU
+        return torch.nansum(IoU)
+
+# class IoUScore(nn.Module):
+#     def __init__(self, weight=None, size_average=True):
+#         super(IoUScore, self).__init__()
+
+#     def forward(self, inputs, targets, smooth=1e-15):
+        
+#         #comment out if your model contains a sigmoid or equivalent activation layer
+#         # inputs = F.sigmoid(inputs)       
+        
+#         #flatten label and prediction tensors
+#         inputs = torch.flatten(inputs)
+#         targets = torch.flatten(targets.float())
+        
+#         #intersection is equivalent to True Positive count
+#         #union is the mutually inclusive area of all labels & predictions 
+#         intersection = (inputs * targets).sum()
+#         total = (inputs + targets).sum()
+#         union = total - intersection 
+        
+#         IoU = (intersection + smooth)/(union + smooth)
+                
+#         return IoU
 
 
 class MultiClassesDiceScore(nn.Module):

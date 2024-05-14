@@ -2,7 +2,9 @@ import wandb
 from dataset.TonThuong import TonThuong
 from dataset.Polyp import Polyp
 from dataset.Benchmark import Benchmark
-from loss.loss import DiceBCELoss
+from dataset.ViTri import ViTri
+from dataset.HP import HP
+from loss.loss import DiceBCELoss, WeightedPosCELoss, WeightedBCELoss
 from score.score import DiceScore
 from model.vit import vit_base, vit_huge
 from model.unetr import UNETR
@@ -62,9 +64,13 @@ class Trainer():
 
     def init_loss(self):
         self.seg_loss = DiceBCELoss().to(self.device)
+        self.cls_loss = WeightedPosCELoss().cuda()
+        self.bi_cls_loss = WeightedBCELoss().cuda()
 
     def init_score(self):
         self.dice_score = DiceScore().to(self.device)
+        self.accuracy = None
+        self.f1_score = None
 
 
     def init_model(self):
@@ -149,9 +155,17 @@ class Trainer():
 
         elif self.task == "classification":
             if self.type_cls == "hp":
-                pass
-            elif self.type_cls == "vitri":
-                pass
+                train_dataset = HP(root_path=self.root_path, mode="train", img_size=self.img_size[0])
+                self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+
+                valid_dataset = HP(root_path=self.root_path, mode="test", img_size=self.img_size[0])
+                self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
+            elif self.type_cls == "vitri": # undone
+                train_dataset = ViTri(root_path=self.root_path, mode="train", img_size=self.img_size[0])
+                self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+
+                valid_dataset = ViTri(root_path=self.root_path, mode="test", img_size=self.img_size[0])
+                self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
 
     def run(self):
         for epoch in range(self.epoch_num):
@@ -163,30 +177,32 @@ class Trainer():
                     },
                     step=epoch 
                 )
-            if self.type_seg != "benchmark":
-                valid_epoch_loss, valid_epoch_score, vis_image = self.valid_one_epoch()
-
-                wandb.log(
-                    {
-                        "valid_epoch_loss": valid_epoch_loss,
-                        "valid_epoch_score": valid_epoch_score,
-                        "valid_image_visualize": vis_image
-                    },
-                    step=epoch
-                )
-            else:
-                for type_test_ds in self.valid_data_loaders:
-                    self.valid_data_loader = self.valid_data_loaders[type_test_ds]
+            if self.task == "segmentation":
+                if self.type_seg != "benchmark":
                     valid_epoch_loss, valid_epoch_score, vis_image = self.valid_one_epoch()
 
                     wandb.log(
                         {
-                            f"{type_test_ds}_valid_epoch_loss": valid_epoch_loss,
-                            f"{type_test_ds}_valid_epoch_score": valid_epoch_score,
-                            f"{type_test_ds}_valid_image_visualize": vis_image
+                            "valid_epoch_loss": valid_epoch_loss,
+                            "valid_epoch_score": valid_epoch_score,
+                            "valid_image_visualize": vis_image
                         },
                         step=epoch
                     )
+                else:
+                    for type_test_ds in self.valid_data_loaders:
+                        self.valid_data_loader = self.valid_data_loaders[type_test_ds]
+                        valid_epoch_loss, valid_epoch_score, vis_image = self.valid_one_epoch()
+
+                        wandb.log(
+                            {
+                                f"{type_test_ds}_valid_epoch_loss": valid_epoch_loss,
+                                f"{type_test_ds}_valid_epoch_score": valid_epoch_score,
+                                f"{type_test_ds}_valid_image_visualize": vis_image
+                            },
+                            step=epoch
+                        )
+            
 
     def train_one_epoch(self):
         steps_per_epoch = len(self.train_data_loader)

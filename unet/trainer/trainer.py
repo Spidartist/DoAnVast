@@ -201,6 +201,7 @@ class Trainer():
         tk0 = tqdm(self.train_data_loader, total=steps_per_epoch)
         for data in tk0:
             img, mask = data
+            n = img.shape[0]
 
             img = img.float().to(self.device)
             mask = mask.float().to(self.device)
@@ -213,7 +214,7 @@ class Trainer():
 
             loss3 = self.seg_loss(seg_out, mask, 1)
 
-            epoch_loss.update(loss3.item())
+            epoch_loss.update(loss3.item(), n=n)
 
             self.optimizer.zero_grad()
             loss3.backward()
@@ -224,8 +225,8 @@ class Trainer():
                 # score = dice_score(seg_out, mask[1], segment_weight)
                 dice_score = self.dice_score(seg_out, mask, 1)
                 iou_score = self.iou_score(seg_out, mask, 1)
-                epoch_dice_score.update(dice_score.item())
-                epoch_iou_score.update(iou_score.item())
+                epoch_dice_score.update(dice_score.item(), n=n)
+                epoch_iou_score.update(iou_score.item(), n=n)
 
             # if global_step % self.save_freq == 0 or global_step == total_steps-1:
             #     torch.save(self.net.state_dict(), self.save_path + f'/model-{self.type_pretrained}-{self.type_damaged}-best.pt')
@@ -248,6 +249,7 @@ class Trainer():
         with torch.no_grad():
             for data in tk0:
                 img, mask = data
+                n = img.shape[0]
 
                 img = img.float().to(self.device)
                 mask = mask.float().to(self.device)
@@ -256,13 +258,13 @@ class Trainer():
 
                 loss3 = self.seg_loss(seg_out, mask, 1)
 
-                epoch_loss.update(loss3.item())
+                epoch_loss.update(loss3.item(), n=n)
 
                 dice_score = self.dice_score(seg_out, mask, 1)
-                epoch_dice_score.update(dice_score.item())
+                epoch_dice_score.update(dice_score.item(), n=n)
 
                 iou_score = self.iou_score(seg_out, mask, 1)
-                epoch_iou_score.update(iou_score.item())
+                epoch_iou_score.update(iou_score.item(), n=n)
 
                 seg_img = seg_out[0]
                 seg_img[seg_img <= 0.5] = 0

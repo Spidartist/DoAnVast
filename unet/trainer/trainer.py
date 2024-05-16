@@ -69,7 +69,8 @@ class Trainer():
 
     def init_score(self):
         self.dice_score = DiceScore().to(self.device)
-        self.accuracy = None
+        self.precision = None
+        self.recall = None
         self.f1_score = None
         self.iou_score = IoUScore().to(self.device)
 
@@ -169,16 +170,16 @@ class Trainer():
 
     def run(self):
         for epoch in range(self.epoch_num):
-            train_epoch_loss, train_epoch_dice_score, train_epoch_iou_score = self.train_one_epoch()
-            wandb.log(
-                    {
-                        "train_epoch_loss": train_epoch_loss,
-                        "train_epoch_dice_score": train_epoch_dice_score,
-                        "train_epoch_iou_score": train_epoch_iou_score
-                    },
-                    step=epoch 
-                )
             if self.task == "segmentation":
+                train_epoch_loss, train_epoch_dice_score, train_epoch_iou_score = self.train_one_epoch()
+                wandb.log(
+                        {
+                            "train_epoch_loss": train_epoch_loss,
+                            "train_epoch_dice_score": train_epoch_dice_score,
+                            "train_epoch_iou_score": train_epoch_iou_score
+                        },
+                        step=epoch 
+                    )
                 if self.type_seg != "benchmark":
                     valid_epoch_loss, valid_epoch_dice_score, valid_epoch_iou_score, vis_image = self.valid_one_epoch()
 
@@ -204,52 +205,94 @@ class Trainer():
                             },
                             step=epoch
                         )
+            elif self.task == "classification":
+                pass
             
 
     def train_one_epoch(self):
         steps_per_epoch = len(self.train_data_loader)
         total_steps = steps_per_epoch * self.epoch_num
         self.net.train()
-        epoch_loss = AverageMeter()
-        epoch_dice_score = AverageMeter()
-        epoch_iou_score = AverageMeter()
+        if self.task == "segmentation":
+            epoch_loss = AverageMeter()
+            epoch_dice_score = AverageMeter()
+            epoch_iou_score = AverageMeter()
 
-        tk0 = tqdm(self.train_data_loader, total=steps_per_epoch)
-        for data in tk0:
-            img, mask = data
-            n = img.shape[0]
+            tk0 = tqdm(self.train_data_loader, total=steps_per_epoch)
+            for data in tk0:
+                img, mask = data
+                n = img.shape[0]
 
-            img = img.float().to(self.device)
-            mask = mask.float().to(self.device)
+                img = img.float().to(self.device)
+                mask = mask.float().to(self.device)
 
-            lr = get_warmup_cosine_lr(self.BASE_LR, self.MAX_LR, self.global_step, total_steps, steps_per_epoch, warmup_epochs=self.warmup_epochs)
-            self.optimizer.param_groups[0]['lr'] = 0.1 * lr
-            self.optimizer.param_groups[1]['lr'] = lr
+                lr = get_warmup_cosine_lr(self.BASE_LR, self.MAX_LR, self.global_step, total_steps, steps_per_epoch, warmup_epochs=self.warmup_epochs)
+                self.optimizer.param_groups[0]['lr'] = 0.1 * lr
+                self.optimizer.param_groups[1]['lr'] = lr
 
-            seg_out = self.net(img)
+                seg_out = self.net(img)
 
-            loss3 = self.seg_loss(seg_out, mask, 1)
+                loss3 = self.seg_loss(seg_out, mask, 1)
 
-            epoch_loss.update(loss3.item(), n=n)
+                epoch_loss.update(loss3.item(), n=n)
 
-            self.optimizer.zero_grad()
-            loss3.backward()
-            self.optimizer.step()
+                self.optimizer.zero_grad()
+                loss3.backward()
+                self.optimizer.step()
 
-            with torch.no_grad():
-                self.net.eval()
-                # score = dice_score(seg_out, mask[1], segment_weight)
-                dice_score = self.dice_score(seg_out, mask, 1)
-                iou_score = self.iou_score(seg_out, mask, 1)
-                epoch_dice_score.update(dice_score.item(), n=n)
-                epoch_iou_score.update(iou_score.item(), n=n)
+                with torch.no_grad():
+                    self.net.eval()
+                    # score = dice_score(seg_out, mask[1], segment_weight)
+                    dice_score = self.dice_score(seg_out, mask, 1)
+                    iou_score = self.iou_score(seg_out, mask, 1)
+                    epoch_dice_score.update(dice_score.item(), n=n)
+                    epoch_iou_score.update(iou_score.item(), n=n)
 
-            # if global_step % self.save_freq == 0 or global_step == total_steps-1:
-            #     torch.save(self.net.state_dict(), self.save_path + f'/model-{self.type_pretrained}-{self.type_damaged}-best.pt')
+                # if global_step % self.save_freq == 0 or global_step == total_steps-1:
+                #     torch.save(self.net.state_dict(), self.save_path + f'/model-{self.type_pretrained}-{self.type_damaged}-best.pt')
 
-            self.global_step += 1
+                self.global_step += 1
 
-        return epoch_loss.avg, epoch_dice_score.avg, epoch_iou_score.avg
+            return epoch_loss.avg, epoch_dice_score.avg, epoch_iou_score.avg
+        elif self.task == "classification":
+            epoch_loss = AverageMeter()
+            epoch_fi_score = AverageMeter()
+            epoch_acc_score = AverageMeter()
+
+            tk0 = tqdm(self.train_data_loader, total=steps_per_epoch)
+            for data in tk0:
+                img, label = data
+                n = img.shape[0]
+
+                img = img.float().to(self.device)
+                label = label.float().to(self.device)
+
+                lr = get_warmup_cosine_lr(self.BASE_LR, self.MAX_LR, self.global_step, total_steps, steps_per_epoch, warmup_epochs=self.warmup_epochs)
+                self.optimizer.param_groups[0]['lr'] = 0.1 * lr
+                self.optimizer.param_groups[1]['lr'] = lr
+
+                cls_out = self.net(img)
+
+                if self.type_cls == "vitri":
+                    loss3 = self.cls_loss(cls_out, label, 1)
+                elif self.type_cls == "HP":
+                    loss3 = self.bi_cls_loss(cls_out, label, 1)
+
+                epoch_loss.update(loss3.item(), n=n)
+
+                self.optimizer.zero_grad()
+                loss3.backward()
+                self.optimizer.step()
+
+                with torch.no_grad():
+                    self.net.eval()
+                    f1_score = self.f1_score(cls_out, label, 1)
+                    acc_score = self.accuracy(cls_out, label, 1)
+                    epoch_dice_score.update(dice_score.item(), n=n)
+                    epoch_iou_score.update(iou_score.item(), n=n)
+
+
+                self.global_step += 1
 
 
     def valid_one_epoch(self):

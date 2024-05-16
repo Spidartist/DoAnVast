@@ -2,7 +2,9 @@ import wandb
 from dataset.TonThuong import TonThuong
 from dataset.Polyp import Polyp
 from dataset.Benchmark import Benchmark
-from loss.loss import DiceBCELoss
+from dataset.ViTri import ViTri
+from dataset.HP import HP
+from loss.loss import DiceBCELoss, WeightedPosCELoss, WeightedBCELoss
 from score.score import DiceScore, IoUScore
 from model.vit import vit_base, vit_huge
 from model.unetr import UNETR
@@ -66,9 +68,14 @@ class Trainer():
 
     def init_loss(self):
         self.seg_loss = DiceBCELoss().to(self.device)
+        self.cls_loss = WeightedPosCELoss().cuda()
+        self.bi_cls_loss = WeightedBCELoss().cuda()
 
     def init_score(self):
         self.dice_score = DiceScore().to(self.device)
+        self.precision = None
+        self.recall = None
+        self.f1_score = None
         self.iou_score = IoUScore().to(self.device)
 
     def init_model(self):
@@ -153,46 +160,58 @@ class Trainer():
 
         elif self.task == "classification":
             if self.type_cls == "hp":
-                pass
-            elif self.type_cls == "vitri":
-                pass
+                train_dataset = HP(root_path=self.root_path, mode="train", img_size=self.img_size[0])
+                self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+
+                valid_dataset = HP(root_path=self.root_path, mode="test", img_size=self.img_size[0])
+                self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
+            elif self.type_cls == "vitri": # undone
+                train_dataset = ViTri(root_path=self.root_path, mode="train", img_size=self.img_size[0])
+                self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+
+                valid_dataset = ViTri(root_path=self.root_path, mode="test", img_size=self.img_size[0])
+                self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
 
     def run(self):
         for epoch in range(self.epoch_num):
-            train_epoch_loss, train_epoch_dice_score, train_epoch_iou_score = self.train_one_epoch()
-            wandb.log(
-                    {
-                        "train_epoch_loss": train_epoch_loss,
-                        "train_epoch_dice_score": train_epoch_dice_score,
-                        "train_epoch_iou_score": train_epoch_iou_score
-                    },
-                    step=epoch 
-                )
-            if self.type_seg != "benchmark":
-                valid_epoch_loss, valid_epoch_dice_score, valid_epoch_iou_score, vis_image = self.valid_one_epoch()
-
+            if self.task == "segmentation":
+                train_epoch_loss, train_epoch_dice_score, train_epoch_iou_score = self.train_one_epoch()
                 wandb.log(
-                    {
-                        "valid_epoch_loss": valid_epoch_loss,
-                        "valid_epoch_dice_score": valid_epoch_dice_score,
-                        "valid_epoch_iou_score": valid_epoch_iou_score,
-                        "valid_image_visualize": vis_image
-                    },
-                    step=epoch
-                )
-            else:
-                for type_test_ds in self.valid_data_loaders:
-                    self.valid_data_loader = self.valid_data_loaders[type_test_ds]
-                    valid_epoch_loss, valid_epoch_score, vis_image = self.valid_one_epoch()
+                        {
+                            "train_epoch_loss": train_epoch_loss,
+                            "train_epoch_dice_score": train_epoch_dice_score,
+                            "train_epoch_iou_score": train_epoch_iou_score
+                        },
+                        step=epoch 
+                    )
+                if self.type_seg != "benchmark":
+                    valid_epoch_loss, valid_epoch_dice_score, valid_epoch_iou_score, vis_image = self.valid_one_epoch()
 
                     wandb.log(
                         {
-                            f"{type_test_ds}_valid_epoch_loss": valid_epoch_loss,
-                            f"{type_test_ds}_valid_epoch_dice_score": valid_epoch_score,
-                            f"{type_test_ds}_valid_image_visualize": vis_image
+                            "valid_epoch_loss": valid_epoch_loss,
+                            "valid_epoch_dice_score": valid_epoch_dice_score,
+                        "valid_epoch_iou_score": valid_epoch_iou_score,
+                            "valid_image_visualize": vis_image
                         },
                         step=epoch
                     )
+                else:
+                    for type_test_ds in self.valid_data_loaders:
+                        self.valid_data_loader = self.valid_data_loaders[type_test_ds]
+                        valid_epoch_loss, valid_epoch_score, vis_image = self.valid_one_epoch()
+
+                        wandb.log(
+                            {
+                                f"{type_test_ds}_valid_epoch_loss": valid_epoch_loss,
+                                f"{type_test_ds}_valid_epoch_dice_score": valid_epoch_score,
+                                f"{type_test_ds}_valid_image_visualize": vis_image
+                            },
+                            step=epoch
+                        )
+            elif self.task == "classification":
+                pass
+            
 
     def train_one_epoch(self):
         steps_per_epoch = len(self.train_data_loader)
@@ -258,13 +277,26 @@ class Trainer():
 
                 cls_out = self.net(img)
 
-                loss3 = self.cls_loss(cls_out, label, 1)
+                if self.type_cls == "vitri":
+                    loss3 = self.cls_loss(cls_out, label, 1)
+                elif self.type_cls == "HP":
+                    loss3 = self.bi_cls_loss(cls_out, label, 1)
 
                 epoch_loss.update(loss3.item(), n=n)
 
                 self.optimizer.zero_grad()
                 loss3.backward()
                 self.optimizer.step()
+
+                with torch.no_grad():
+                    self.net.eval()
+                    f1_score = self.f1_score(cls_out, label, 1)
+                    acc_score = self.accuracy(cls_out, label, 1)
+                    epoch_dice_score.update(dice_score.item(), n=n)
+                    epoch_iou_score.update(iou_score.item(), n=n)
+
+
+                self.global_step += 1
 
 
     def valid_one_epoch(self):

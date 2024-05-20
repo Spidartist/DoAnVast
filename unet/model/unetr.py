@@ -12,6 +12,15 @@ from model.vit import get_vision_transformer
 # UNETR IMPLEMENTATION [Vision Transformer (ViT from IJEPA) + UNet Decoder from `torch_em`]
 #
 
+class FeatAvgPool(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.avg_pool = nn.AdaptiveAvgPool1d(1)
+
+    def forward(self, x):
+        # bs, seq_len, dims = x.shape
+        x = x.permute((0, 2, 1))
+        return self.avg_pool(x).squeeze()
 
 class UNETR(nn.Module):
 
@@ -31,10 +40,14 @@ class UNETR(nn.Module):
         use_skip_connection: bool = True,
         embed_dim: Optional[int] = None,
         use_conv_transpose=True,
+        task="segmentation",
+        type_cls="HP"
     ) -> None:
         super().__init__()
-
+        self.task = task
+        self.type_cls = type_cls
         self.use_skip_connection = use_skip_connection
+        self.avg_pool = FeatAvgPool()
 
         if isinstance(encoder, str):  # "vit_b" / "vit_l" / "vit_h"
             print(f"Using {encoder} from {backbone.upper()}")
@@ -114,7 +127,21 @@ class UNETR(nn.Module):
 
         self.decoder_head = ConvBlock2d(2 * features_decoder[-1], features_decoder[-1])
 
+        self.fc3 = nn.Linear(768, 256)
+        self.fc3_1 = nn.Linear(256, 1)
+
+        self.fc1 = nn.Linear(768, 512)
+        self.fc1_1 = nn.Linear(512, 10)
+
         self.final_activation = self._get_activation(final_activation)
+    
+    def freeze_encoder(self):
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+
+    def unfreeze_encoder(self):
+        for param in self.encoder.parameters():
+            param.requires_grad = True
 
     def _get_activation(self, activation):
         return_activation = None
@@ -149,7 +176,10 @@ class UNETR(nn.Module):
 
         use_skip_connection = getattr(self, "use_skip_connection", True)
 
-        encoder_outputs = self.encoder(x, return_features=True)
+        if self.task == "segmentation":
+            encoder_outputs = self.encoder(x, return_features=True)
+        else:
+            encoder_outputs = self.encoder(x)
 
         if isinstance(encoder_outputs[-1], list):
             # `encoder_outputs` can be arranged in only two forms:
@@ -158,36 +188,48 @@ class UNETR(nn.Module):
             z12, from_encoder = encoder_outputs
         else:
             z12 = encoder_outputs
+        if self.task == "segmentation":
+            if use_skip_connection:
+                from_encoder = from_encoder[::-1]
+                z9 = self.deconv1(from_encoder[0])
+                z6 = self.deconv2(from_encoder[1])
+                z3 = self.deconv3(from_encoder[2])
+                z0 = self.deconv4(x)
 
-        if use_skip_connection:
-            from_encoder = from_encoder[::-1]
-            z9 = self.deconv1(from_encoder[0])
-            z6 = self.deconv2(from_encoder[1])
-            z3 = self.deconv3(from_encoder[2])
-            z0 = self.deconv4(x)
+            else:
+                z9 = self.deconv1(z12)
+                z6 = self.deconv2(z9)
+                z3 = self.deconv3(z6)
+                z0 = self.deconv4(z3)
 
-        else:
-            z9 = self.deconv1(z12)
-            z6 = self.deconv2(z9)
-            z3 = self.deconv3(z6)
-            z0 = self.deconv4(z3)
+            updated_from_encoder = [z9, z6, z3]
 
-        updated_from_encoder = [z9, z6, z3]
+            x = self.base(z12)
+            x = self.decoder(x, encoder_inputs=updated_from_encoder)
+            x = self.deconv_out(x)
 
-        x = self.base(z12)
-        x = self.decoder(x, encoder_inputs=updated_from_encoder)
-        x = self.deconv_out(x)
+            x = torch.cat([x, z0], dim=1)
+            x = self.decoder_head(x)
 
-        x = torch.cat([x, z0], dim=1)
-        x = self.decoder_head(x)
+            x = self.out_conv(x)
+            if self.final_activation is not None:
+                x = self.final_activation(x)
 
-        x = self.out_conv(x)
-        if self.final_activation is not None:
-            x = self.final_activation(x)
-
-        # x = self.postprocess_masks(x, input_shape, original_shape)
-        return x
-
+            # x = self.postprocess_masks(x, input_shape, original_shape)
+            return x
+        elif self.task == "classification":
+            if self.type_cls == "HP":
+                # print(f"z12.shape: {z12.shape}")
+                x = self.avg_pool(z12)
+                # print(f"z12.shape: {z12.shape}")
+                x = self.fc3(x)
+                x = self.fc3_1(x)
+                return x
+            elif self.type_cls == "vitri":
+                x = self.avg_pool(z12)
+                x = self.fc1(x)
+                x = self.fc1_1(x)
+                return x
 
 #
 #  ADDITIONAL FUNCTIONALITIES

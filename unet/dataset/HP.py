@@ -30,8 +30,10 @@ class HP(Dataset):
                 self.samples.append([e["image"], e["label"]])
 
         else:
-            for e in data[self.mode]["images"]:
-                self.samples.append([e, data[self.mode]["label"]])
+            for e in data["test_positive"]["images"]:
+                self.samples.append([e, data["test_positive"]["label"]])
+            for e in data["test_negative"]["images"]:
+                self.samples.append([e, data["test_negative"]["label"]])
     
     def aug(self, image):
         if self.mode == 'train':
@@ -56,7 +58,7 @@ class HP(Dataset):
         return t(image=image)
     
     def __len__(self):
-        return len(self.image_paths)
+        return len(self.samples)
     
     def __getitem__(self, index):
         full_image_path = os.path.join(self.root_path, self.samples[index][0])

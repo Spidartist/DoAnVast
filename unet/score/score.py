@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 class DiceScore(nn.Module):
     def __init__(self, weight=None, size_average=True):
@@ -25,6 +26,58 @@ class DiceScore(nn.Module):
         dice = (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
         
         return torch.nansum(dice)
+    
+class MicroMacroDiceIoU(nn.Module):
+    def __init__(self, weight=None, size_average=True):
+        super(MicroMacroDiceIoU, self).__init__()
+    def forward(self, inputs, targets, smooth=1):
+        inputs = torch.sigmoid(inputs)
+        inputs[inputs < 0.5] = 0
+        inputs[inputs >= 0.5] = 1
+
+        tp = (inputs * targets).sum(dim=(1, 2, 3))
+        fp = inputs.sum(dim=(1, 2, 3)) - tp
+        fn = targets.sum(dim=(1, 2, 3)) - tp
+        iou = (tp + smooth) / (tp + fp + fn + smooth)
+        dice = (2 * tp + smooth) / (2 * tp + fp + fn + smooth)
+        intersection = tp
+        union = tp + fp + fn
+        intersection2 = 2*tp
+        total_area = 2 * tp + fp + fn
+        return iou, dice, intersection, union, intersection2, total_area
+    
+class FbetaScore(nn.Module):
+    def __init__(self, weight=None, size_average=True, beta=1):
+        super(FbetaScore, self).__init__()
+
+    def precision(y_true, y_pred):
+        intersection = (y_true * y_pred).sum()
+        return (intersection + 1e-15) / (y_pred.sum() + 1e-15)
+
+    def recall(y_true, y_pred):
+        intersection = (y_true * y_pred).sum()
+        return (intersection + 1e-15) / (y_true.sum() + 1e-15)
+
+    def Fbeta(y_true, y_pred, beta=1):
+        p = precision(y_true,y_pred)
+        r = recall(y_true, y_pred)
+        return (1+beta**2.) *(p*r) / float(beta**2*p + r + 1e-15)
+    
+    def forward(self, inputs, targets, smooth=1):
+        inputs = torch.sigmoid(inputs)
+        inputs[inputs < 0.5] = 0
+        inputs[inputs >= 0.5] = 1
+
+        tp = (inputs * targets).sum(dim=(1, 2, 3))
+        fp = inputs.sum(dim=(1, 2, 3)) - tp
+        fn = targets.sum(dim=(1, 2, 3)) - tp
+        iou = (tp + smooth) / (tp + fp + fn + smooth)
+        dice = (2 * tp + smooth) / (2 * tp + fp + fn + smooth)
+        intersection = tp
+        union = tp + fp + fn
+        intersection2 = 2*tp
+        total_area = 2 * tp + fp + fn
+        return iou, dice, intersection, union, intersection2, total_area
     
 class IoUScore(nn.Module):
     def __init__(self, weight=None, size_average=True):
@@ -121,7 +174,7 @@ def recall(y_true, y_pred):
     intersection = (y_true * y_pred).sum()
     return (intersection + 1e-15) / (y_true.sum() + 1e-15)
 
-def F2(y_true, y_pred, beta=2):
+def Fbeta(y_true, y_pred, beta=1):
     p = precision(y_true,y_pred)
     r = recall(y_true, y_pred)
     return (1+beta**2.) *(p*r) / float(beta**2*p + r + 1e-15)
@@ -133,3 +186,43 @@ def jac_score(y_true, y_pred):
     intersection = (y_true * y_pred).sum()
     union = y_true.sum() + y_pred.sum() - intersection
     return (intersection + 1e-15) / (union + 1e-15)
+
+class Metric():
+    def __init__(self, name):
+        self.name = name
+        self.total_tp = 0
+        self.total_fp = 0
+        self.total_fn = 0
+        self.list_iou_score = []
+        self.list_dice_score = []
+
+    def cal(self, predict, mask, smooth=1):
+        tp, fp, fn = self.metric(predict, mask)
+        self.total_tp += tp
+        self.total_fp += fp
+        self.total_fn += fn
+
+        iou_score = (tp + smooth) / (tp + fp + fn + smooth)
+        dice_score = (2*tp + smooth) / (2*tp + fp + fn + smooth)
+        self.list_iou_score.append(iou_score)
+        self.list_dice_score.append(dice_score)
+
+    def show(self):
+        dice_score = 2 * self.total_tp / \
+            (2 * self.total_tp + self.total_fp + self.total_fn)
+        iou_score = self.total_tp / \
+            (self.total_tp + self.total_fp + self.total_fn)
+
+        print("Evaluate {}".format(self.name))
+        print("Dice score micro {}".format(dice_score))
+        print("IoU score micro {}".format(iou_score))
+        print("Dice score macro {}".format(
+            np.array(self.list_dice_score).mean()))
+        print("IoU score macro {}".format(np.array(self.list_iou_score).mean()))
+
+    def metric(self, inputs, targets):
+        tp = np.sum(inputs * targets)
+        fp = np.sum(inputs) - tp
+        fn = np.sum(targets) - tp
+
+        return tp, fp, fn

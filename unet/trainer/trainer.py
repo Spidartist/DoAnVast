@@ -22,7 +22,7 @@ class Trainer():
     def __init__(
             self, device, type_pretrained, type_damaged, json_path,
             root_path, wandb_token, task="segmentation", type_seg="TonThuong", type_cls="HP",
-            num_freeze=10, max_lr=1e-3
+            num_freeze=10, max_lr=1e-3, img_size=256
         ):
         self.device = device
         self.type_pretrained = type_pretrained
@@ -33,11 +33,12 @@ class Trainer():
         self.wandb_token = wandb_token
         self.BASE_LR = 1e-6
         self.MAX_LR = max_lr
+        self.img_size = (img_size, img_size)
         if self.type_pretrained == "endoscopy" or self.type_pretrained == "endoscopy1" or self.type_pretrained == "none" or self.type_pretrained == "endoscopy2":
-            self.img_size = (256, 256)
+            # self.img_size = (256, 256)
             self.batch_size = 16  # old = 16
         elif self.type_pretrained == "im1k":
-            self.img_size = (448, 448)
+            # self.img_size = (448, 448)
             self.batch_size = 1
         self.epoch_num = 100
         self.save_freq = 1
@@ -322,6 +323,7 @@ class Trainer():
                 self.optimizer.step()
 
                 self.global_step += 1
+            return epoch_loss.avg
 
 
     def valid_one_epoch(self):
@@ -393,21 +395,21 @@ class Trainer():
             with torch.no_grad():
                 for data in tk0:
                     img, label = data
-                n = img.shape[0]
-                total_sample += n
-                img = img.float().to(self.device)
-                label = label.float().to(self.device)
+                    n = img.shape[0]
+                    total_sample += n
+                    img = img.float().to(self.device)
+                    label = label.float().to(self.device)
 
-                cls_out = self.net(img)
+                    cls_out = self.net(img)
 
-                if self.type_cls == "vitri":
-                    loss3 = self.cls_loss(cls_out, label)
-                    total_correct_sample += get_item(cls_out, label)
-                elif self.type_cls == "HP":
-                    loss3 = self.bi_cls_loss(cls_out, label)
-                    total_correct_sample += get_item_binary(cls_out, label)
+                    if self.type_cls == "vitri":
+                        loss3 = self.cls_loss(cls_out, label)
+                        total_correct_sample += get_item(cls_out, label)
+                    elif self.type_cls == "HP":
+                        loss3 = self.bi_cls_loss(cls_out, label)
+                        total_correct_sample += get_item_binary(cls_out, label)
 
-                epoch_loss.update(loss3.item(), n=n)
+                    epoch_loss.update(loss3.item(), n=n)
             acc = total_correct_sample/total_sample
             return epoch_loss.avg, acc
 

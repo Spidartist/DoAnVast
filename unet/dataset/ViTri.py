@@ -5,6 +5,7 @@ import albumentations as A
 import cv2
 import numpy as np
 import torch
+from pprint import pprint
 
 class ViTri(Dataset):
     def __init__(
@@ -24,14 +25,12 @@ class ViTri(Dataset):
         with open(self.path) as f:
             data = json.load(f)
         self.samples = []
-        if self.mode == "train":
-            for e in data[self.mode]:
-                self.samples.append([e["image"], e["label"]])
+        not_load = "metadata"
+        for type in data:
+            if type != not_load:
+                for e in data[type][self.mode]:
+                    self.samples.append([e, data[type]["labels"]])
 
-        else:
-            for e in data[self.mode]["images"]:
-                self.samples.append([e, data[self.mode]["label"]])
-    
     def aug(self, image):
         if self.mode == 'train':
             t1 = A.Compose([A.Resize(self.img_size, self.img_size),])
@@ -72,4 +71,8 @@ class ViTri(Dataset):
         
 
         return img, image_label
+    
+if __name__ == "__main__":
+    vitri = ViTri(mode="train")
+    pprint(len(vitri.samples))
 

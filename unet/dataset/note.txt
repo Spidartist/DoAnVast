@@ -1,0 +1,12 @@
+- 6 file json
+- Phân loại: 10 vị trí gp
+- Phân loại: HP (binary)
+- Segmentation: polyp + benchmark + ton thuong
+- Phân loại: 
+    0: 0 tổn thương
+    1: UT dạ dày
+    2: UT thực quản
+    3: Viêm dạ dày
+    4: Viêm thsực quản
+    5: Viêm loét hoành tá tràng
+    6: Polyp 

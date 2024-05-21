@@ -127,11 +127,11 @@ class UNETR(nn.Module):
 
         self.decoder_head = ConvBlock2d(2 * features_decoder[-1], features_decoder[-1])
 
-        self.fc3 = nn.Linear(768, 256)
-        self.fc3_1 = nn.Linear(256, 1)
+        # self.fc3 = nn.Linear(768, 256)
+        self.fc3_1 = nn.Linear(768, 1)
 
-        self.fc1 = nn.Linear(768, 512)
-        self.fc1_1 = nn.Linear(512, 10)
+        # self.fc1 = nn.Linear(768, 512)
+        self.fc1_1 = nn.Linear(768, 10)
 
         self.final_activation = self._get_activation(final_activation)
     
@@ -222,12 +222,12 @@ class UNETR(nn.Module):
                 # print(f"z12.shape: {z12.shape}")
                 x = self.avg_pool(z12)
                 # print(f"z12.shape: {z12.shape}")
-                x = self.fc3(x)
+                # x = self.fc3(x)
                 x = self.fc3_1(x)
                 return x
             elif self.type_cls == "vitri":
                 x = self.avg_pool(z12)
-                x = self.fc1(x)
+                # x = self.fc1(x)
                 x = self.fc1_1(x)
                 return x
 

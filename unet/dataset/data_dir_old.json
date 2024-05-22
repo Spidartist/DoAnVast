@@ -74,6 +74,7 @@
             "name": "tonthuong",
             "type": "segmentation",
             "type_ton_thuong": "ung_thu_thuc_quan_20230620",
+            "position_label": 1,
             "damage_label": 1,
             "segmentation_label": 1,
             "location": "/mnt/quanhd/endoscopy/ft_ton_thuong.json"
@@ -81,6 +82,7 @@
             "name": "tonthuong",
             "type": "segmentation",
             "type_ton_thuong": "viem_thuc_quan_20230620",
+            "position_label": 1,
             "damage_label": 2,
             "segmentation_label": 2,
             "location": "/mnt/quanhd/endoscopy/ft_ton_thuong.json"
@@ -88,6 +90,7 @@
             "name": "tonthuong",
             "type": "segmentation",
             "type_ton_thuong": "viem_loet_hoanh_ta_trang_20230620",
+            "position_label": 8,
             "damage_label": 3,
             "segmentation_label": 3,
             "location": "/mnt/quanhd/endoscopy/ft_ton_thuong.json"

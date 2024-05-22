@@ -36,7 +36,7 @@ class Trainer():
         self.img_size = (img_size, img_size)
         if self.type_pretrained == "endoscopy" or self.type_pretrained == "endoscopy1" or self.type_pretrained == "none" or self.type_pretrained == "endoscopy2":
             # self.img_size = (256, 256)
-            self.batch_size = 16  # old = 16
+            self.batch_size = 8  # old = 16
         elif self.type_pretrained == "im1k":
             # self.img_size = (448, 448)
             self.batch_size = 1
@@ -84,28 +84,28 @@ class Trainer():
 
     def init_model(self):
         if self.type_pretrained == "endoscopy":
-            encoder = vit_base(img_size=[self.img_size[0]])
+            encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300.pth.tar")
             encoder.load_state_dict(ckpt["target_encoder"])
         elif self.type_pretrained == "endoscopy1":
-            encoder = vit_base(img_size=[self.img_size[0]])
+            encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300_17_5_crop.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300_17_5_crop.pth.tar")
             encoder.load_state_dict(ckpt["target_encoder"])
         elif self.type_pretrained == "endoscopy2":
-            encoder = vit_base(img_size=[self.img_size[0]])
+            encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
             encoder.load_state_dict(ckpt["target_encoder"])
         elif self.type_pretrained == "none":
-            encoder = vit_base(img_size=[self.img_size[0]])
+            encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
         elif self.type_pretrained == "im1k":
-            encoder = vit_huge(img_size=[self.img_size[0]])
+            encoder = vit_huge(img_size=[448])
             print(self.type_pretrained)
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/IN1K-vit.h.16-448px-300e.pth.tar")
             new_state_dict = load_state_dict_wo_module(ckpt["target_encoder"])
@@ -136,7 +136,7 @@ class Trainer():
         wandb.login(key=self.wandb_token)
         wandb.init(
             project=self.type_seg+"new",
-            name=f"{self.type_damaged}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}",
+            name=f"{self.type_damaged}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}",
             config={
                 "batch": self.batch_size,
                 "MAX_LR": self.MAX_LR,

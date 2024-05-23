@@ -1,0 +1,11 @@
+{
+    "dirs": [
+        {
+            "name": "benchmark",
+            "type": "segmentation",
+            "damage_label": 6,
+            "segmentation_label": 6,
+            "location": "/mnt/quanhd/endoscopy/public_dataset.json"
+        }
+    ]
+}

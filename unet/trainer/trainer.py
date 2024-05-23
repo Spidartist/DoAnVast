@@ -34,7 +34,7 @@ class Trainer():
         self.BASE_LR = 1e-6
         self.MAX_LR = max_lr
         self.img_size = (img_size, img_size)
-        if self.type_pretrained == "endoscopy" or self.type_pretrained == "endoscopy1" or self.type_pretrained == "none" or self.type_pretrained == "endoscopy2":
+        if self.type_pretrained == "endoscopy" or self.type_pretrained == "endoscopy1" or self.type_pretrained == "none" or self.type_pretrained == "endoscopy2" or self.type_pretrained == "endoscopy3":
             # self.img_size = (256, 256)
             self.batch_size = 8  # old = 16
         elif self.type_pretrained == "im1k":
@@ -101,6 +101,12 @@ class Trainer():
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
             encoder.load_state_dict(ckpt["target_encoder"])
+        elif self.type_pretrained == "endoscopy3":
+            encoder = vit_base(img_size=[256])
+            print(self.type_pretrained)
+            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
+            print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
+            encoder.load_state_dict(ckpt["target_encoder"])
         elif self.type_pretrained == "none":
             encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
@@ -135,7 +141,7 @@ class Trainer():
     def init_logger(self):
         wandb.login(key=self.wandb_token)
         wandb.init(
-            project=self.type_seg+"new",
+            project=self.type_seg+"2",
             name=f"{self.type_damaged}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}",
             config={
                 "batch": self.batch_size,
@@ -303,7 +309,7 @@ class Trainer():
                 n = img.shape[0]
 
                 img = img.float().to(self.device)
-                label = label.float().to(self.device)
+                label = label.to(self.device)
 
                 lr = get_warmup_cosine_lr(self.BASE_LR, self.MAX_LR, self.global_step, total_steps, steps_per_epoch, warmup_epochs=self.warmup_epochs)
                 self.optimizer.param_groups[0]['lr'] = 0.1 * lr
@@ -314,6 +320,7 @@ class Trainer():
                 if self.type_cls == "vitri":
                     loss3 = self.cls_loss(cls_out, label)
                 elif self.type_cls == "HP":
+                    label = label.float()
                     loss3 = self.bi_cls_loss(cls_out, label)
 
                 epoch_loss.update(loss3.item(), n=n)
@@ -398,7 +405,7 @@ class Trainer():
                     n = img.shape[0]
                     total_sample += n
                     img = img.float().to(self.device)
-                    label = label.float().to(self.device)
+                    label = label.to(self.device)
 
                     cls_out = self.net(img)
 
@@ -406,6 +413,7 @@ class Trainer():
                         loss3 = self.cls_loss(cls_out, label)
                         total_correct_sample += get_item(cls_out, label)
                     elif self.type_cls == "HP":
+                        label = label.float()
                         loss3 = self.bi_cls_loss(cls_out, label)
                         total_correct_sample += get_item_binary(cls_out, label)
 

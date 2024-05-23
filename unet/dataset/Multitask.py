@@ -19,26 +19,63 @@ class MultiTask(Dataset):
         self.path = path
         self.img_size = img_size
         self.mode = mode
+        self.samples = []
         self.root_path = root_path
         self.load_data_from_json()
 
     def load_data_from_json(self):
         with open(self.path) as f:
-            data = json.load(f)
-        for dir in data["dirs"]:
+            dirs = json.load(f)["dirs"]
+        for dir in dirs:
             name = dir["name"]
             type = dir["type"]
             position_label = dir.get('position_label', -1)
             damage_label = dir.get('damage_label', -1)
             seg_label = dir.get('segmentation_label', 0)
+            type_ton_thuong = dir.get('type_ton_thuong', "")
+            type_giai_phau = dir.get('type_giai_phau', "")
+            hp_label = -1
             location = dir['location']
-            if name == "vitrigiaiphau":
-                data = json.load(location)
-                not_load = "metadata"
-                for type in data:
-                    if type != not_load:
-                        for e in data[type][self.mode]:
-                            self.samples.append([e, data[type]["labels"]])
+            if type == "segmentation":
+                if name == "polyp":
+                    with open(location) as f:
+                        data = json.load(f)
+                    image_paths = data[self.mode]["images"]
+                    mask_paths = data[self.mode]["masks"]
+                    for img_path, mask_path in zip(image_paths, mask_paths):
+                        self.samples.append([img_path, mask_path, position_label, damage_label, seg_label, hp_label])
+                elif name == "tonthuong":
+                    with open(location) as f:
+                        data = json.load(f)[type_ton_thuong]
+                    image_paths = data[self.mode]["images"]
+                    mask_paths = data[self.mode]["masks"]
+                    for img_path, mask_path in zip(image_paths, mask_paths):
+                        self.samples.append([img_path, mask_path, position_label, damage_label, seg_label, hp_label])
+            elif type == "classification":
+                if name == "vitrigiaiphau":
+                    with open(location) as f:
+                        data = json.load(f)
+                    for img_path in data[type_giai_phau][self.mode]:
+                        self.samples.append([img_path, None, position_label, damage_label, seg_label, hp_label])
+                elif name == "hp":
+                    with open(location) as f:
+                        data = json.load(f)
+                    if self.mode == "train":
+                        image_paths = data[self.mode]
+                        for elem in image_paths:
+                            hp_label = elem["label"]
+                            img_path = elem["image"]
+                            self.samples.append([img_path, None, position_label, damage_label, seg_label, hp_label])
+                    else:
+                        image_paths = data["test_positive"]["images"]
+                        hp_label = data["test_positive"]["label"]
+                        for img_path in image_paths:
+                            self.samples.append([img_path, None, position_label, damage_label, seg_label, hp_label])
+
+                        image_paths = data["test_negative"]["images"]
+                        hp_label = data["test_positive"]["label"]
+                        for img_path in image_paths:
+                            self.samples.append([img_path, None, position_label, damage_label, seg_label, hp_label])
     
     def aug(self, image, mask):
         img_size = self.img_size
@@ -65,14 +102,18 @@ class MultiTask(Dataset):
         return t(image=image, mask=mask)
     
     def __len__(self):
-        return len(self.image_paths)
+        return len(self.samples)
     
     def __getitem__(self, index):
-        full_image_path = os.path.join(self.root_path, self.image_paths[index])
-        full_mask_path = os.path.join(self.root_path, self.mask_paths[index])
+        img_path, mask_path, position_label, damage_label, seg_label, hp_label = self.samples[index]
+        full_image_path = os.path.join(self.root_path, img_path)
+        full_mask_path = os.path.join(self.root_path, mask_path)
 
         img = cv2.imread(full_image_path).astype(np.float32)
-        orin_mask = cv2.imread(full_mask_path).astype(np.float32)
+        if mask_path is not None:
+            orin_mask = cv2.imread(full_mask_path).astype(np.float32)
+        else:
+            orin_mask = img
 
         augmented = self.aug(img, orin_mask)
         img = augmented['image']
@@ -88,7 +129,12 @@ class MultiTask(Dataset):
         orin_mask[orin_mask <= 0.5] = 0
         orin_mask[orin_mask > 0.5] = 1
 
-        return img, orin_mask
+        if mask_path is None:
+            segment_weight = 0
+        else:
+            segment_weight = seg_label
+
+        return img, orin_mask, position_label, damage_label, segment_weight, hp_label
 
 
 
@@ -97,4 +143,48 @@ class MultiTask(Dataset):
 
 
 if __name__ == "__main__":
-    ds = MultiTask()
+    # Ton thuong
+    mode = "test"
+    ds = MultiTask(path="/mnt/quanhd/DoAn/unet/dataset/test_ton_thuong_dir.json", mode=mode)
+    pprint(len(ds.samples))
+    with open("/mnt/quanhd/endoscopy/ft_ton_thuong.json") as f:  # ton thuong 
+        data = json.load(f)
+    total = 0
+    for datum in data:
+        d = data[datum]
+        total += len(d[mode]["images"])
+    print(f"Ton thuong-{mode}: {total}")
+
+    # vi tri
+    mode = "train"
+    ds = MultiTask(path="/mnt/quanhd/DoAn/unet/dataset/test_vi_tri_dir.json", mode=mode)
+    pprint(len(ds.samples))
+    with open("/mnt/quanhd/endoscopy/vi_tri_giai_phau.json") as f: 
+        data = json.load(f)
+    total = 0
+    for datum in data:
+        if datum != "metadata":
+            total += len(data[datum][mode])
+    print(f"Vi tri-{mode}: {total}")
+
+    # polyp
+    mode = "test"
+    ds = MultiTask(path="/mnt/quanhd/DoAn/unet/dataset/test_polyp_dir.json", mode=mode)
+    pprint(len(ds.samples))
+    with open("/mnt/quanhd/endoscopy/polyp.json") as f: 
+        data = json.load(f)
+    print(f"Polyp-{mode}: {len(data[mode]['images'])}")
+
+    # hp
+    mode = "test"
+    ds = MultiTask(path="/mnt/quanhd/DoAn/unet/dataset/test_hp_dir.json", mode=mode)
+    pprint(len(ds.samples))
+    total = 0
+    with open("/mnt/quanhd/endoscopy/hp.json") as f:
+        data = json.load(f)
+    if mode == "train":
+        total += len(data[mode])
+    else:
+        total += len(data["test_positive"]["images"])
+        total += len(data["test_negative"]["images"])
+    print(f"hp-{mode}: {total}")

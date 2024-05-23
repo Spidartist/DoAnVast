@@ -1,0 +1,10 @@
+{
+    "dirs": [
+        {
+            "name": "hp",
+            "type": "classification",
+            "damage_label": 7,
+            "location": "/mnt/quanhd/endoscopy/hp.json"
+        }
+    ]
+}

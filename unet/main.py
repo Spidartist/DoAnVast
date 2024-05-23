@@ -25,7 +25,7 @@ def run():
 
     WANDB_TOKEN = "cca12c93cb17351580e3f9fd5136347e65a3463d"
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device = torch.device('cuda:0')
     torch.cuda.set_device(device)
 

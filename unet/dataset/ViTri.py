@@ -29,7 +29,7 @@ class ViTri(Dataset):
         for type in data:
             if type != not_load:
                 for e in data[type][self.mode]:
-                    self.samples.append([e, data[type]["labels"]])
+                    self.samples.append([e, int(data[type]["labels"])-1])
 
     def aug(self, image):
         if self.mode == 'train':
@@ -54,7 +54,7 @@ class ViTri(Dataset):
         return t(image=image)
     
     def __len__(self):
-        return len(self.image_paths)
+        return len(self.samples)
     
     def __getitem__(self, index):
         full_image_path = os.path.join(self.root_path, self.samples[index][0])

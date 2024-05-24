@@ -22,7 +22,7 @@ class Trainer():
     def __init__(
             self, device, type_pretrained, type_damaged, json_path,
             root_path, wandb_token, task="segmentation", type_seg="TonThuong", type_cls="HP",
-            num_freeze=10, max_lr=1e-3, img_size=256
+            num_freeze=10, max_lr=1e-3, img_size=256, type_opt="Adam"
         ):
         self.device = device
         self.type_pretrained = type_pretrained
@@ -32,11 +32,12 @@ class Trainer():
         self.num_freeze= num_freeze
         self.wandb_token = wandb_token
         self.BASE_LR = 1e-6
+        self.type_opt = type_opt
         self.MAX_LR = max_lr
         self.img_size = (img_size, img_size)
         if self.type_pretrained == "endoscopy" or self.type_pretrained == "endoscopy1" or self.type_pretrained == "none" or self.type_pretrained == "endoscopy2" or self.type_pretrained == "endoscopy3":
             # self.img_size = (256, 256)
-            self.batch_size = 8  # old = 16
+            self.batch_size = 16  # old = 16
         elif self.type_pretrained == "im1k":
             # self.img_size = (448, 448)
             self.batch_size = 1
@@ -49,12 +50,13 @@ class Trainer():
         self.task = task
         self.type_seg = type_seg
         self.type_cls = type_cls
-        self.init_logger()
+        # self.init_logger()
         self.init_data_loader()
         self.init_loss()
         self.init_score()
         self.init_model()
         self.init_optim()
+        self.init_logger()
         self.display_info()
 
     def display_info(self):
@@ -135,14 +137,20 @@ class Trainer():
             else:
                 head.append(param)
 
-        self.optimizer = optim.Adam([{'params': base}, {'params': head}], lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
-
+        if self.type_opt == "Adam":
+            self.optimizer = optim.Adam([{'params': base}, {'params': head}], lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
+        elif self.type_opt == "SGD":
+            self.optimizer = optim.SGD([{'params': base}, {'params': head}], lr=0.001, weight_decay=0)
 
     def init_logger(self):
+        if self.task == "segmentation":
+            name = f"{self.type_opt}-{self.type_seg}-{self.type_damaged}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
+        elif self.task == "classification":
+            name = f"{self.type_opt}-{self.type_cls}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
         wandb.login(key=self.wandb_token)
         wandb.init(
             project=self.type_seg+"2",
-            name=f"{self.type_damaged}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}",
+            name=name,
             config={
                 "batch": self.batch_size,
                 "MAX_LR": self.MAX_LR,

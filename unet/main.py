@@ -13,6 +13,7 @@ def parse_args():
     parser.add_argument('--json_path', help='path to json file', default="/mnt/quanhd/endoscopy/ft_ton_thuong.json", type=str)
     parser.add_argument('--root_path', help='path to root folder of data', default="/home/s/DATA/", type=str)
     parser.add_argument('--gpu', help='id of GPU', default="0", type=str)
+    parser.add_argument('--type_opt', help='type of optimizer', default="Adam", type=str)
     parser.add_argument('--num_freeze', help='number epoch to freeze the encoder', default=0, type=int)
     parser.add_argument('--lr', help='learning rate', default=1e-3, type=float)
     parser.add_argument('--img_size', help='image size', default=256, type=int)
@@ -25,14 +26,15 @@ def run():
 
     WANDB_TOKEN = "cca12c93cb17351580e3f9fd5136347e65a3463d"
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     device = torch.device('cuda:0')
     torch.cuda.set_device(device)
 
     trainer = Trainer(
                 device=device, type_pretrained=args.type_pretrained, type_damaged=args.type_damaged,
                 json_path=args.json_path, root_path=args.root_path, wandb_token=WANDB_TOKEN, type_seg=args.type_seg,
-                num_freeze=args.num_freeze, max_lr=args.lr, task=args.task, type_cls=args.type_cls, img_size=args.img_size)
+                num_freeze=args.num_freeze, max_lr=args.lr, task=args.task, type_cls=args.type_cls, \
+                img_size=args.img_size, type_opt=args.type_opt)
     
     trainer.run()
 

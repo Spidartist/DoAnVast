@@ -18,7 +18,9 @@
 # python main.py --type_damaged ung_thu_da_day_20230620 --type_pretrained endoscopy --root_path "/mnt/tuyenld/data/endoscopy/" --type_seg "TonThuong" --num_freeze 100
 
 # python main.py --type_pretrained endoscopy --task classification --type_cls HP --num_freeze 10 --lr 1e-3 --root_path "/mnt/tuyenld/data/endoscopy/" --img_size 256
-python main.py --type_pretrained endoscopy3 --task classification --type_cls vitri --num_freeze 10 --lr 1e-3 --root_path "/mnt/tuyenld/data/endoscopy/" --img_size 336 --gpu "1" --type_opt "SGD"
 # python main.py --type_pretrained endoscopy --task classification --type_cls HP --num_freeze 0 --lr 1e-3 --root_path "/mnt/tuyenld/data/endoscopy/" --img_size 256
+python main.py --type_pretrained endoscopy3 --task classification --type_cls vitri --num_freeze 10 --lr 1e-3 --root_path "/mnt/tuyenld/data/endoscopy/" --img_size 336 --gpu "1" --type_opt "SGD"
 python main.py --type_pretrained endoscopy3 --task classification --type_cls vitri --num_freeze 0 --lr 1e-3 --root_path "/mnt/tuyenld/data/endoscopy/" --img_size 336 --gpu "1" --type_opt "SGD"
 
+python main.py --type_pretrained endoscopy3 --task classification --type_cls vitri --num_freeze 10 --lr 1e-3 --root_path "/mnt/tuyenld/data/endoscopy/" --img_size 336 --gpu "1" --type_opt "Adam"
+python main.py --type_pretrained endoscopy3 --task classification --type_cls vitri --num_freeze 0 --lr 1e-3 --root_path "/mnt/tuyenld/data/endoscopy/" --img_size 336 --gpu "1" --type_opt "Adam"

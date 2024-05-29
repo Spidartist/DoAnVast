@@ -22,7 +22,7 @@ class Trainer():
     def __init__(
             self, device, type_pretrained, type_damaged, json_path,
             root_path, wandb_token, task="segmentation", type_seg="TonThuong", type_cls="HP",
-            num_freeze=10, max_lr=1e-3, img_size=256, type_opt="Adam", batch_size=16
+            num_freeze=10, max_lr=1e-3, img_size=256, type_opt="Adam", batch_size=16, accum_iter=16
         ):
         self.device = device
         self.type_pretrained = type_pretrained
@@ -31,6 +31,7 @@ class Trainer():
         self.root_path = root_path
         self.num_freeze= num_freeze
         self.wandb_token = wandb_token
+        self.accum_iter = accum_iter
         self.BASE_LR = 1e-6
         self.type_opt = type_opt
         self.MAX_LR = max_lr
@@ -159,7 +160,8 @@ class Trainer():
                 "MAX_LR": self.MAX_LR,
                 "BASE_LR": self.BASE_LR,
                 "img_size": self.img_size,
-                "epoch_num": self.epoch_num
+                "epoch_num": self.epoch_num,
+                "accum_iter": self.accum_iter
             },
         )
 
@@ -285,7 +287,7 @@ class Trainer():
             epoch_loss = AverageMeter()
 
             tk0 = tqdm(self.train_data_loader, total=steps_per_epoch)
-            for data in tk0:
+            for batch_idx, data in enumerate(tk0):
                 img, mask = data
                 n = img.shape[0]
 
@@ -300,11 +302,15 @@ class Trainer():
 
                 loss3 = self.seg_loss(seg_out, mask, 1)
 
-                epoch_loss.update(loss3.item(), n=n)
+                loss3 = loss3 / self.accum_iter
 
-                self.optimizer.zero_grad()
+
+                epoch_loss.update(loss3.item(), n=n)
                 loss3.backward()
-                self.optimizer.step()
+
+                if ((batch_idx + 1) % self.accum_iter == 0) or (batch_idx + 1 == len(tk0)):
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
 
                 # if global_step % self.save_freq == 0 or global_step == total_steps-1:
                 #     torch.save(self.net.state_dict(), self.save_path + f'/model-{self.type_pretrained}-{self.type_damaged}-best.pt')

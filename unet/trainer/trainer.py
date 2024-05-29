@@ -22,7 +22,7 @@ class Trainer():
     def __init__(
             self, device, type_pretrained, type_damaged, json_path,
             root_path, wandb_token, task="segmentation", type_seg="TonThuong", type_cls="HP",
-            num_freeze=10, max_lr=1e-3, img_size=256, type_opt="Adam"
+            num_freeze=10, max_lr=1e-3, img_size=256, type_opt="Adam", batch_size=16
         ):
         self.device = device
         self.type_pretrained = type_pretrained
@@ -35,12 +35,13 @@ class Trainer():
         self.type_opt = type_opt
         self.MAX_LR = max_lr
         self.img_size = (img_size, img_size)
-        if self.type_pretrained == "endoscopy" or self.type_pretrained == "endoscopy1" or self.type_pretrained == "none" or self.type_pretrained == "endoscopy2" or self.type_pretrained == "endoscopy3":
-            # self.img_size = (256, 256)
-            self.batch_size = 16  # old = 16
-        elif self.type_pretrained == "im1k":
-            # self.img_size = (448, 448)
-            self.batch_size = 1
+        self.batch_size = batch_size
+        # if self.type_pretrained == "endoscopy" or self.type_pretrained == "endoscopy1" or self.type_pretrained == "none" or self.type_pretrained == "endoscopy2" or self.type_pretrained == "endoscopy3":
+        #     # self.img_size = (256, 256)
+        #     self.batch_size = 16  # old = 16
+        # elif self.type_pretrained == "im1k":
+        #     # self.img_size = (448, 448)
+        #     self.batch_size = 1
         self.epoch_num = 100
         self.save_freq = 1
         self.save_path = "/logs/"

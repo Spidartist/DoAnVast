@@ -17,6 +17,7 @@ def parse_args():
     parser.add_argument('--num_freeze', help='number epoch to freeze the encoder', default=0, type=int)
     parser.add_argument('--lr', help='learning rate', default=1e-3, type=float)
     parser.add_argument('--img_size', help='image size', default=256, type=int)
+    parser.add_argument('--batch_size', help='batch size', default=16, type=int)
     args = parser.parse_args()
     return args
 
@@ -34,7 +35,7 @@ def run():
                 device=device, type_pretrained=args.type_pretrained, type_damaged=args.type_damaged,
                 json_path=args.json_path, root_path=args.root_path, wandb_token=WANDB_TOKEN, type_seg=args.type_seg,
                 num_freeze=args.num_freeze, max_lr=args.lr, task=args.task, type_cls=args.type_cls, \
-                img_size=args.img_size, type_opt=args.type_opt)
+                img_size=args.img_size, type_opt=args.type_opt, batch_size=args.batch_size)
     
     trainer.run()
 

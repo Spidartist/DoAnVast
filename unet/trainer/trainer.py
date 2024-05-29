@@ -142,6 +142,8 @@ class Trainer():
             self.optimizer = optim.Adam([{'params': base}, {'params': head}], lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
         elif self.type_opt == "SGD":
             self.optimizer = optim.SGD([{'params': base}, {'params': head}], lr=0.001, weight_decay=0)
+        elif self.type_opt == "AdamW":
+            self.optimizer = optim.AdamW([{'params': base}, {'params': head}], lr=1e-4, weight_decay=1e-5)
 
     def init_logger(self):
         if self.task == "segmentation":
@@ -207,7 +209,7 @@ class Trainer():
 
                 valid_dataset = HP(root_path=self.root_path, mode="test", img_size=self.img_size[0])
                 self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
-            elif self.type_cls == "vitri": # undone
+            elif self.type_cls == "vitri": 
                 train_dataset = ViTri(root_path=self.root_path, mode="train", img_size=self.img_size[0])
                 self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
 

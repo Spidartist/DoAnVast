@@ -16,6 +16,8 @@ class Benchmark(Dataset):
             ds_test="CVC-300",
             img_size=256,
             root_path="home/s/DATA/"
+            # root_path="/mnt/tuyenld/data/endoscopy/"
+
         ):
         self.path = path
         self.img_size = img_size

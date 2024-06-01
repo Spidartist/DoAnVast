@@ -8,7 +8,7 @@ from loss.loss import DiceBCELoss, WeightedPosCELoss, WeightedBCELoss
 from score.score import DiceScore, IoUScore, MicroMacroDiceIoU
 from model.vit import vit_base, vit_huge
 from model.unetr import UNETR
-from utils.lr import get_warmup_cosine_lr
+from utils.lr import get_warmup_cosine_lr, WarmupCosineSchedule
 from utils.helper import load_state_dict_wo_module, AverageMeter, ScoreAverageMeter, GetItem, GetItemBinary
 
 import torch
@@ -21,8 +21,9 @@ from torch.utils.data import DataLoader
 class Trainer():
     def __init__(
             self, device, type_pretrained, type_damaged, json_path,
-            root_path, wandb_token, task="segmentation", type_seg="TonThuong", type_cls="HP",
-            num_freeze=10, max_lr=1e-3, img_size=256, type_opt="Adam", batch_size=16, accum_iter=16
+            root_path, wandb_token,  min_lr=2e-4, ref_lr=1e-3, task="segmentation", type_seg="TonThuong", type_cls="HP",
+            num_freeze=10, max_lr=1e-6, img_size=256, type_opt="Adam", batch_size=16, accum_iter=16,
+            type_encoder="targte_encoder",
         ):
         self.device = device
         self.type_pretrained = type_pretrained
@@ -32,7 +33,9 @@ class Trainer():
         self.num_freeze= num_freeze
         self.wandb_token = wandb_token
         self.accum_iter = accum_iter
-        self.BASE_LR = 1e-6
+        self.type_encoder = type_encoder
+        self.MIN_LR = min_lr
+        self.BASE_LR = ref_lr
         self.type_opt = type_opt
         self.MAX_LR = max_lr
         self.img_size = (img_size, img_size)
@@ -43,10 +46,10 @@ class Trainer():
         # elif self.type_pretrained == "im1k":
         #     # self.img_size = (448, 448)
         #     self.batch_size = 1
-        self.epoch_num = 100
+        self.epoch_num = 60
         self.save_freq = 1
         self.save_path = "/logs/"
-        self.warmup_epochs = 2
+        self.warmup_epochs = 6
         self.global_step = 0
 
         self.task = task
@@ -92,25 +95,25 @@ class Trainer():
             print(self.type_pretrained)
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300.pth.tar")
-            encoder.load_state_dict(ckpt["target_encoder"])
+            encoder.load_state_dict(ckpt[self.type_encoder])
         elif self.type_pretrained == "endoscopy1":
             encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300_17_5_crop.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300_17_5_crop.pth.tar")
-            encoder.load_state_dict(ckpt["target_encoder"])
+            encoder.load_state_dict(ckpt[self.type_encoder])
         elif self.type_pretrained == "endoscopy2":
             encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
-            encoder.load_state_dict(ckpt["target_encoder"])
+            encoder.load_state_dict(ckpt[self.type_encoder])
         elif self.type_pretrained == "endoscopy3":
             encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
-            encoder.load_state_dict(ckpt["target_encoder"])
+            encoder.load_state_dict(ckpt[self.type_encoder])
         elif self.type_pretrained == "none":
             encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
@@ -118,7 +121,7 @@ class Trainer():
             encoder = vit_huge(img_size=[448])
             print(self.type_pretrained)
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/IN1K-vit.h.16-448px-300e.pth.tar")
-            new_state_dict = load_state_dict_wo_module(ckpt["target_encoder"])
+            new_state_dict = load_state_dict_wo_module(ckpt[self.type_encoder])
             encoder.load_state_dict(new_state_dict)
         if self.task == "segmentation":
             self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder)
@@ -142,13 +145,16 @@ class Trainer():
         if self.type_opt == "Adam":
             self.optimizer = optim.Adam([{'params': base}, {'params': head}], lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
         elif self.type_opt == "SGD":
-            self.optimizer = optim.SGD([{'params': base}, {'params': head}], lr=0.001, weight_decay=0)
+            self.optimizer = optim.SGD([{'params': base}, {'params': head}], lr=3e-5, weight_decay=0, momentum=0.9)
         elif self.type_opt == "AdamW":
             self.optimizer = optim.AdamW([{'params': base}, {'params': head}], lr=1e-4, weight_decay=1e-5)
 
+        ipe = len(self.train_data_loader)
+        self.lr_scheduler = WarmupCosineSchedule(self.optimizer, ipe*self.warmup_epochs/self.accum_iter, self.MIN_LR, self.BASE_LR, ipe*self.epoch_num/self.accum_iter, self.MAX_LR)
+
     def init_logger(self):
         if self.task == "segmentation":
-            name = f"{self.type_opt}-{self.type_seg}-{self.type_damaged}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
+            name = f"{self.type_opt}-{self.type_seg}-{self.type_encoder}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
         elif self.task == "classification":
             name = f"{self.type_opt}-{self.type_cls}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
         wandb.login(key=self.wandb_token)
@@ -159,6 +165,7 @@ class Trainer():
                 "batch": self.batch_size,
                 "MAX_LR": self.MAX_LR,
                 "BASE_LR": self.BASE_LR,
+                "MIN_LR": self.MIN_LR,
                 "img_size": self.img_size,
                 "epoch_num": self.epoch_num,
                 "accum_iter": self.accum_iter
@@ -223,10 +230,11 @@ class Trainer():
             if epoch == self.num_freeze:
                 self.net.unfreeze_encoder()
             if self.task == "segmentation":
-                train_epoch_loss = self.train_one_epoch()
+                train_epoch_loss, head_lr = self.train_one_epoch()
                 wandb.log(
                         {
                             "train_epoch_loss": train_epoch_loss,
+                            "head_lr": head_lr
                         },
                         step=epoch 
                     )
@@ -261,10 +269,11 @@ class Trainer():
                             step=epoch
                         )
             elif self.task == "classification":
-                train_epoch_loss = self.train_one_epoch()
+                train_epoch_loss, head_lr = self.train_one_epoch()
                 wandb.log(
                     {
                         "train_epoch_loss": train_epoch_loss,
+                        "head_lr": head_lr
                     },
                     step=epoch 
                 )
@@ -294,9 +303,9 @@ class Trainer():
                 img = img.float().to(self.device)
                 mask = mask.float().to(self.device)
 
-                lr = get_warmup_cosine_lr(self.BASE_LR, self.MAX_LR, self.global_step, total_steps, steps_per_epoch, warmup_epochs=self.warmup_epochs)
-                self.optimizer.param_groups[0]['lr'] = 0.1 * lr
-                self.optimizer.param_groups[1]['lr'] = lr
+                # lr = get_warmup_cosine_lr(self.BASE_LR, self.MAX_LR, self.global_step, total_steps, steps_per_epoch, warmup_epochs=self.warmup_epochs)
+                # self.optimizer.param_groups[0]['lr'] = 0.1 * lr
+                # self.optimizer.param_groups[1]['lr'] = lr
 
                 seg_out = self.net(img)
 
@@ -309,6 +318,7 @@ class Trainer():
                 loss3.backward()
 
                 if ((batch_idx + 1) % self.accum_iter == 0) or (batch_idx + 1 == len(tk0)):
+                    self.lr_scheduler.step()
                     self.optimizer.step()
                     self.optimizer.zero_grad()
 
@@ -317,7 +327,7 @@ class Trainer():
 
                 self.global_step += 1
 
-            return epoch_loss.avg
+            return epoch_loss.avg, self.optimizer.param_groups[1]["lr"]
         elif self.task == "classification":
             epoch_loss = AverageMeter()
             tk0 = tqdm(self.train_data_loader, total=steps_per_epoch)

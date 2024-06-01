@@ -142,7 +142,12 @@ class UNETR(nn.Module):
         for param in self.encoder.parameters():
             param.requires_grad = False
 
+    def freeze_encoder_embedding(self):
+        for param in self.encoder.parameters():
+            pass
+
     def unfreeze_encoder(self):
+        print("Unfreeze!!!")
         for param in self.encoder.parameters():
             param.requires_grad = True
 

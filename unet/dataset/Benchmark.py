@@ -76,7 +76,7 @@ class Benchmark(Dataset):
         img = torch.from_numpy(img.copy())
         img = img.permute(2, 0, 1)
         img /= 255.
-        
+
         orin_mask = torch.from_numpy(orin_mask.copy())
         orin_mask = orin_mask.permute(2, 0, 1)
         orin_mask = orin_mask.mean(dim=0, keepdim=True)/255.
@@ -84,4 +84,10 @@ class Benchmark(Dataset):
         orin_mask[orin_mask > 0.5] = 1
 
         return img, orin_mask
+
+
+if __name__ == "__main__":
+    ds = Benchmark()
+    print(ds.image_paths[5])
+    print(ds.mask_paths[5])
 

@@ -114,6 +114,12 @@ class Trainer():
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
             encoder.load_state_dict(ckpt[self.type_encoder])
+        elif self.type_pretrained == "endoscopy4":
+            encoder = vit_base(img_size=[256])
+            print(self.type_pretrained)
+            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
+            print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
+            encoder.load_state_dict(ckpt[self.type_encoder])
         elif self.type_pretrained == "none":
             encoder = vit_base(img_size=[256])
             print(self.type_pretrained)

@@ -23,7 +23,7 @@ class Trainer():
             self, device, type_pretrained, type_damaged, json_path,
             root_path, wandb_token,  min_lr=2e-4, ref_lr=1e-3, task="segmentation", type_seg="TonThuong", type_cls="HP",
             num_freeze=10, max_lr=1e-6, img_size=256, type_opt="Adam", batch_size=16, accum_iter=16,
-            type_encoder="targte_encoder",
+            type_encoder="target_encoder", train_ratio=1.0
         ):
         self.device = device
         self.type_pretrained = type_pretrained
@@ -35,6 +35,7 @@ class Trainer():
         self.accum_iter = accum_iter
         self.type_encoder = type_encoder
         self.MIN_LR = min_lr
+        self.train_ratio = train_ratio
         self.BASE_LR = ref_lr
         self.type_opt = type_opt
         self.MAX_LR = max_lr
@@ -137,8 +138,8 @@ class Trainer():
             elif self.type_cls == "vitri":
                 self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder, task="classification", type_cls="vitri")
         self.net.to(self.device)
-        if self.num_freeze > 0:
-            self.net.freeze_encoder()
+        # if self.num_freeze > 0:
+        #     self.net.freeze_encoder()
 
     def init_optim(self):
         base, head = [], []
@@ -153,19 +154,19 @@ class Trainer():
         elif self.type_opt == "SGD":
             self.optimizer = optim.SGD([{'params': base}, {'params': head}], lr=3e-5, weight_decay=0, momentum=0.9)
         elif self.type_opt == "AdamW":
-            self.optimizer = optim.AdamW([{'params': base}, {'params': head}], lr=1e-4, weight_decay=1e-5)
+            self.optimizer = optim.AdamW([{'params': base}, {'params': head}], lr=1e-4, betas=(0.9, 0.999), weight_decay=0.05)
 
         ipe = len(self.train_data_loader)
         self.lr_scheduler = WarmupCosineSchedule(self.optimizer, ipe*self.warmup_epochs/self.accum_iter, self.MIN_LR, self.BASE_LR, ipe*self.epoch_num/self.accum_iter, self.MAX_LR)
 
     def init_logger(self):
         if self.task == "segmentation":
-            name = f"{self.type_opt}-{self.type_seg}-{self.type_encoder}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
+            name = f"{self.type_opt}-{self.type_seg}-{self.type_encoder}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}-train_ratio:{self.train_ratio}"
         elif self.task == "classification":
             name = f"{self.type_opt}-{self.type_cls}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
         wandb.login(key=self.wandb_token)
         wandb.init(
-            project=self.type_seg+"2",
+            project=self.type_seg+"4",
             name=name,
             config={
                 "batch": self.batch_size,
@@ -193,7 +194,7 @@ class Trainer():
                 valid_dataset = Polyp(root_path=self.root_path, mode="test", img_size=self.img_size[0])
                 self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
             elif self.type_seg == "benchmark":
-                train_dataset = Benchmark(root_path=self.root_path, img_size=self.img_size[0])
+                train_dataset = Benchmark(root_path=self.root_path, img_size=self.img_size[0], train_ratio=self.train_ratio)
                 self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
                 
                 self.valid_data_loaders = {}
@@ -233,8 +234,8 @@ class Trainer():
 
     def run(self):
         for epoch in range(self.epoch_num):
-            if epoch == self.num_freeze:
-                self.net.unfreeze_encoder()
+            # if epoch == self.num_freeze:
+            #     self.net.unfreeze_encoder()
             if self.task == "segmentation":
                 train_epoch_loss, head_lr = self.train_one_epoch()
                 wandb.log(

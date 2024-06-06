@@ -15,7 +15,8 @@ class Benchmark(Dataset):
             mode="train",
             ds_test="CVC-300",
             img_size=256,
-            root_path="home/s/DATA/"
+            root_path="home/s/DATA/",
+            train_ratio=1.0
             # root_path="/mnt/tuyenld/data/endoscopy/"
 
         ):
@@ -23,6 +24,7 @@ class Benchmark(Dataset):
         self.img_size = img_size
         self.mode = mode
         self.ds_test = ds_test
+        self.train_ratio = train_ratio
         self.root_path = root_path
         self.load_data_from_json()
 
@@ -32,6 +34,12 @@ class Benchmark(Dataset):
         if self.mode == "train":
             self.image_paths = data[self.mode]["images"]
             self.mask_paths = data[self.mode]["masks"]
+            print(f"Pre len(image_paths) = {len(self.image_paths)}")
+            print(f"Pre len(mask_paths) = {len(self.mask_paths)}")
+            self.image_paths = self.image_paths[:int(len(self.image_paths)*self.train_ratio)]
+            self.mask_paths = self.mask_paths[:int(len(self.mask_paths)*self.train_ratio)]
+            print(f"After len(image_paths) = {len(self.image_paths)}")
+            print(f"After len(mask_paths) = {len(self.mask_paths)}")
         elif self.mode == "test":
             self.image_paths = data[self.mode][self.ds_test]["images"]
             self.mask_paths = data[self.mode][self.ds_test]["masks"]

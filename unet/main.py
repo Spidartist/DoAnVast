@@ -19,6 +19,7 @@ def parse_args():
     parser.add_argument('--min_lr', help='learning rate', default=1e-3, type=float)
     parser.add_argument('--lr', help='learning rate', default=1e-3, type=float)
     parser.add_argument('--max_lr', help='learning rate', default=1e-3, type=float)
+    parser.add_argument('--train_ratio', help='training ratio', default=1.0, type=float)
     parser.add_argument('--img_size', help='image size', default=256, type=int)
     parser.add_argument('--batch_size', help='batch size', default=16, type=int)
     parser.add_argument('--accum_iter', help='accum_iter', default=16, type=int)
@@ -39,7 +40,8 @@ def run():
                 device=device, type_pretrained=args.type_pretrained, type_damaged=args.type_damaged,
                 json_path=args.json_path, root_path=args.root_path, wandb_token=WANDB_TOKEN, type_seg=args.type_seg,
                 num_freeze=args.num_freeze, max_lr=args.max_lr, ref_lr=args.lr, min_lr=args.min_lr, task=args.task, type_cls=args.type_cls, \
-                img_size=args.img_size, type_opt=args.type_opt, batch_size=args.batch_size, accum_iter=args.accum_iter, type_encoder=args.type_encoder)
+                img_size=args.img_size, type_opt=args.type_opt, batch_size=args.batch_size, accum_iter=args.accum_iter, type_encoder=args.type_encoder,
+                train_ratio=args.train_ratio)
     
     trainer.run()
 

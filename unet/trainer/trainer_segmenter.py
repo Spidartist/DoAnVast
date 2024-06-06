@@ -8,6 +8,7 @@ from loss.loss import DiceBCELoss, WeightedPosCELoss, WeightedBCELoss
 from score.score import DiceScore, IoUScore, MicroMacroDiceIoU
 from model.vit import vit_base, vit_huge
 from model.unetr import UNETR
+from model.segmenter_decoder import MaskTransformer, Segmenter
 from utils.lr import get_warmup_cosine_lr
 from utils.helper import load_state_dict_wo_module, AverageMeter, ScoreAverageMeter, GetItem, GetItemBinary
 
@@ -111,6 +112,12 @@ class Trainer():
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
             encoder.load_state_dict(ckpt["target_encoder"])
+        elif self.type_pretrained == "endoscopy4":
+            encoder = vit_base(img_size=[256])
+            print(self.type_pretrained)
+            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
+            print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
+            encoder.load_state_dict(ckpt["target_encoder"])
         elif self.type_pretrained == "none":
             encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
@@ -121,7 +128,18 @@ class Trainer():
             new_state_dict = load_state_dict_wo_module(ckpt["target_encoder"])
             encoder.load_state_dict(new_state_dict)
         if self.task == "segmentation":
-            self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder)
+            n_cls = 2
+            # encoder = vit_base(img_size=[256])
+            decoder = MaskTransformer(
+                        n_cls=n_cls, patch_size=encoder.patch_embed.patch_size, 
+                        d_encoder=encoder.embed_dim,
+                        n_layers=2, n_heads=encoder.embed_dim//64, mlp_ratio=4.,
+                        d_model=encoder.embed_dim,
+                        drop_path_rate=0.0,
+                        dropout=0.1
+                    )
+
+            self.net = Segmenter(encoder=encoder, decoder=decoder, n_cls=n_cls)
         elif self.task == "classification":
             if self.type_cls == "HP":
                 self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder, task="classification", type_cls="HP")
@@ -142,7 +160,7 @@ class Trainer():
         if self.type_opt == "Adam":
             self.optimizer = optim.Adam([{'params': base}, {'params': head}], lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
         elif self.type_opt == "SGD":
-            self.optimizer = optim.SGD([{'params': base}, {'params': head}], lr=0.001, weight_decay=0)
+            self.optimizer = optim.SGD([{'params': base}, {'params': head}], lr=0.001, momentum=0.9)
         elif self.type_opt == "AdamW":
             self.optimizer = optim.AdamW([{'params': base}, {'params': head}], lr=1e-4, weight_decay=1e-5)
 
@@ -219,8 +237,8 @@ class Trainer():
 
     def run(self):
         for epoch in range(self.epoch_num):
-            if epoch == self.num_freeze:
-                self.net.unfreeze_encoder()
+            # if epoch == self.num_freeze:
+            #     self.net.unfreeze_encoder()
             if self.task == "segmentation":
                 train_epoch_loss = self.train_one_epoch()
                 wandb.log(

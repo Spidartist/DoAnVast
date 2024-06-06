@@ -1,4 +1,4 @@
-from trainer.trainer import Trainer
+from trainer.trainer_segmenter import Trainer
 import argparse
 import os
 import torch

@@ -139,10 +139,16 @@ class UNETR(nn.Module):
         self.final_activation = self._get_activation(final_activation)
     
     def freeze_encoder(self):
+        print("Freeze!!!")
         for param in self.encoder.parameters():
             param.requires_grad = False
 
+    def freeze_encoder_embedding(self):
+        for param in self.encoder.parameters():
+            pass
+
     def unfreeze_encoder(self):
+        print("Unfreeze!!!")
         for param in self.encoder.parameters():
             param.requires_grad = True
 

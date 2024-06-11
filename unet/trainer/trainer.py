@@ -161,7 +161,7 @@ class Trainer():
 
     def init_logger(self):
         if self.task == "segmentation":
-            name = f"{self.type_opt}-{self.type_seg}-{self.type_encoder}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}-train_ratio:{self.train_ratio}"
+            name = f"{self.type_opt}-{self.type_seg}-{self.type_damaged}-{self.type_encoder}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}-train_ratio:{self.train_ratio}"
         elif self.task == "classification":
             name = f"{self.type_opt}-{self.type_cls}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
         wandb.login(key=self.wandb_token)

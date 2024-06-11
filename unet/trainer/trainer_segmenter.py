@@ -124,11 +124,11 @@ class Trainer():
         elif self.type_pretrained == "im1k":
             encoder = vit_huge(img_size=[448])
             print(self.type_pretrained)
-            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/IN1K-vit.h.16-448px-300e.pth.tar")
-            new_state_dict = load_state_dict_wo_module(ckpt["target_encoder"])
+            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/splitted_target_encoder_IN1K-vit.h.16-448px-300e.pth.tar")
+            new_state_dict = load_state_dict_wo_module(ckpt)
             encoder.load_state_dict(new_state_dict)
         if self.task == "segmentation":
-            n_cls = 2
+            n_cls = 1
             # encoder = vit_base(img_size=[256])
             decoder = MaskTransformer(
                         n_cls=n_cls, patch_size=encoder.patch_embed.patch_size, 
@@ -316,6 +316,12 @@ class Trainer():
                 self.optimizer.param_groups[1]['lr'] = lr
 
                 seg_out = self.net(img)
+                print(seg_out.shape)
+                print(mask.shape)
+                print(seg_out.min(), seg_out.max())
+                print(seg_out.sum())
+                print(mask.min(), mask.max())
+
 
                 loss3 = self.seg_loss(seg_out, mask, 1)
 

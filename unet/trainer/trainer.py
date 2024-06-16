@@ -127,8 +127,8 @@ class Trainer():
         elif self.type_pretrained == "im1k":
             encoder = vit_huge(img_size=[448])
             print(self.type_pretrained)
-            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/IN1K-vit.h.16-448px-300e.pth.tar")
-            new_state_dict = load_state_dict_wo_module(ckpt[self.type_encoder])
+            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/splitted_target_encoder_IN1K-vit.h.16-448px-300e.pth.tar")
+            new_state_dict = load_state_dict_wo_module(ckpt)
             encoder.load_state_dict(new_state_dict)
         if self.task == "segmentation":
             self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder)
@@ -363,7 +363,7 @@ class Trainer():
                 self.optimizer.step()
 
                 self.global_step += 1
-            return epoch_loss.avg
+            return epoch_loss.avg, self.optimizer.param_groups[1]["lr"]
 
 
     def valid_one_epoch(self):

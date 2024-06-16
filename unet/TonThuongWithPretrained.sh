@@ -16,7 +16,7 @@ python main.py --type_damaged viem_thuc_quan_20230620 --type_pretrained endoscop
 
 
 # python main.py --type_damaged ung_thu_da_day_20230620 --type_pretrained endoscopy2 --root_path "/mnt/tuyenld/data/endoscopy/" --type_seg "TonThuong" --num_freeze 0 --lr 1e-3
-# python main.py --type_damaged ung_thu_da_day_20230620 --type_pretrained endoscopy2 --root_path "/mnt/tuyenld/data/endoscopy/" --type_seg "TonThuong" --num_freeze 10 --lr 1e-3
+# python main.py --type_damaged ung_thu_da_day_20230620 --type_pretrained endoscopy2 --root_path "/mnt/tuyenld/data/endoscopy/" --type_seg "TonThuong" --num_freeze 10 -s-lr 1e-3
 # python main.py --type_damaged ung_thu_da_day_20230620 --type_pretrained endoscopy --root_path "/mnt/tuyenld/data/endoscopy/" --type_seg "TonThuong" --num_freeze 10 --lr 1e-4
 
 # python main.py --type_damaged ung_thu_da_day_20230620 --type_pretrained endoscopy --root_path "/mnt/tuyenld/data/endoscopy/" --type_seg "TonThuong" --num_freeze 100

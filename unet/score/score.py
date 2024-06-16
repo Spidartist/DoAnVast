@@ -30,7 +30,7 @@ class DiceScore(nn.Module):
 class MicroMacroDiceIoU(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(MicroMacroDiceIoU, self).__init__()
-    def forward(self, inputs, targets, smooth=1):
+    def forward(self, inputs, targets, smooth=1e-6):
         inputs = torch.sigmoid(inputs)
         inputs[inputs < 0.5] = 0
         inputs[inputs >= 0.5] = 1

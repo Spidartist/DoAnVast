@@ -89,5 +89,5 @@ class TonThuong(Dataset):
 
 
 if __name__ == "__main__":
-    ds = TonThuong()
-    print(ds.__len__())
+    ds = TonThuong(root_path="/mnt/tuyenld/data/endoscopy")
+    print(ds.__getitem__(0)[1])

@@ -4,7 +4,8 @@ from loss.loss import DiceBCELoss, WeightedPosCELoss, WeightedBCELoss
 from score.score import DiceScore, IoUScore, MicroMacroDiceIoUMultitask
 from model.vit import vit_base, vit_huge
 from model.unetr import UNETRMultitask
-from model.vit_adapter import IJEPAAdapter
+from model.unet import Unet
+# from model.vit_adapter import IJEPAAdapter
 from utils.lr import get_warmup_cosine_lr, WarmupCosineSchedule
 from utils.helper import load_state_dict_wo_module, AverageMeter, MicroMacroMeter, GetItem, GetItemBinary
 import numpy as np
@@ -81,84 +82,92 @@ class Trainer():
         self.get_item_binary = GetItemBinary()
 
     def init_model(self):
-        if self.type_pretrained == "endoscopy":
-            encoder = vit_base(img_size=[256])
-            print(self.type_pretrained)
-            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300.pth.tar")
-            print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300.pth.tar")
-            encoder.load_state_dict(ckpt[self.type_encoder])
-        elif self.type_pretrained == "endoscopy1":
-            encoder = vit_base(img_size=[256])
-            print(self.type_pretrained)
-            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300_17_5_crop.pth.tar")
-            print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300_17_5_crop.pth.tar")
-            encoder.load_state_dict(ckpt[self.type_encoder])
-        elif self.type_pretrained == "endoscopy2":
-            encoder = vit_base(img_size=[256])
-            print(self.type_pretrained)
-            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
-            print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
-            encoder.load_state_dict(ckpt[self.type_encoder])
-        elif self.type_pretrained == "endoscopy3":
-            encoder = vit_base(img_size=[256])
-            print(self.type_pretrained)
-            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
-            print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
-            encoder.load_state_dict(ckpt[self.type_encoder])
-        elif self.type_pretrained == "endoscopy4":
-            encoder = vit_base(img_size=[256])
-            print(self.type_pretrained)
-            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
-            print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
-            encoder.load_state_dict(ckpt[self.type_encoder])
-        elif self.type_pretrained == "endoscopy_mae":
-            encoder = vit_base(img_size=[224])
-            print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
-            ckpt = torch.load(pth)
-            print(f"loaded from {pth} at epoch {ckpt['epoch']}")
-            encoder.load_state_dict(ckpt[self.type_encoder])
-        elif self.type_pretrained == "endoscopy_mae_adapter":
-            encoder = IJEPAAdapter(pretrain_size=224)
-            print("Use adapter")
-            print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
-            ckpt = torch.load(pth)
-            print(f"loaded from {pth} at epoch {ckpt['epoch']}")
-            encoder.load_state_dict(ckpt[self.type_encoder], strict=False)
-        elif self.type_pretrained == "endoscopy_mae1":
-            encoder = vit_base(img_size=[224])
-            print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-latest.pth.tar"
-            ckpt = torch.load(pth)
-            print(f"loaded from {pth} at epoch {ckpt['epoch']}")
-            encoder.load_state_dict(ckpt[self.type_encoder])
-        elif self.type_pretrained == "mae":
-            encoder = vit_base(img_size=[224])
-            print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_endoscopy_pretrained/mae_pretrain_vit_base.pth"
-            ckpt = torch.load(pth)
-            del ckpt["model"]["cls_token"]
-            ckpt["model"]["pos_embed"] = ckpt["model"]["pos_embed"][:, 1:, :]
-            encoder.load_state_dict(ckpt["model"])
-        elif self.type_pretrained == "none":
-            encoder = vit_base(img_size=[256])
-            print(self.type_pretrained)
-        elif self.type_pretrained == "im1k":
-            encoder = vit_huge(img_size=[448])
-            print(self.type_pretrained)
-            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/splitted_target_encoder_IN1K-vit.h.16-448px-300e.pth.tar")
-            new_state_dict = load_state_dict_wo_module(ckpt)
-            encoder.load_state_dict(new_state_dict)
-        self.net = UNETRMultitask(img_size=self.img_size[0], backbone="ijepa", encoder=encoder)
-        self.net.to(self.device)
-        # if self.num_freeze > 0:
-        #     self.net.freeze_encoder()
+        if self.type_pretrained == "resnet":
+            print("EndoUnet")
+            self.net = Unet(classes=1, position_classes=10, damage_classes=8, backbone_name='resnet50', pretrained=True)
+            self.net.to(self.device)
+        else:
+            if self.type_pretrained == "endoscopy":
+                encoder = vit_base(img_size=[256])
+                print(self.type_pretrained)
+                ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300.pth.tar")
+                print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300.pth.tar")
+                encoder.load_state_dict(ckpt[self.type_encoder])
+            elif self.type_pretrained == "endoscopy1":
+                encoder = vit_base(img_size=[256])
+                print(self.type_pretrained)
+                ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300_17_5_crop.pth.tar")
+                print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep300_17_5_crop.pth.tar")
+                encoder.load_state_dict(ckpt[self.type_encoder])
+            elif self.type_pretrained == "endoscopy2":
+                encoder = vit_base(img_size=[256])
+                print(self.type_pretrained)
+                ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
+                print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
+                encoder.load_state_dict(ckpt[self.type_encoder])
+            elif self.type_pretrained == "endoscopy3":
+                encoder = vit_base(img_size=[256])
+                print(self.type_pretrained)
+                ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
+                print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
+                encoder.load_state_dict(ckpt[self.type_encoder])
+            elif self.type_pretrained == "endoscopy4":
+                encoder = vit_base(img_size=[256])
+                print(self.type_pretrained)
+                ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
+                print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
+                encoder.load_state_dict(ckpt[self.type_encoder])
+            elif self.type_pretrained == "endoscopy_mae":
+                encoder = vit_base(img_size=[224])
+                print(self.type_pretrained)
+                pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
+                ckpt = torch.load(pth)
+                print(f"loaded from {pth} at epoch {ckpt['epoch']}")
+                encoder.load_state_dict(ckpt[self.type_encoder])
+            # elif self.type_pretrained == "endoscopy_mae_adapter":
+            #     encoder = IJEPAAdapter(pretrain_size=224)
+            #     print("Use adapter")
+            #     print(self.type_pretrained)
+            #     pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
+            #     ckpt = torch.load(pth)
+            #     print(f"loaded from {pth} at epoch {ckpt['epoch']}")
+            #     encoder.load_state_dict(ckpt[self.type_encoder], strict=False)
+            elif self.type_pretrained == "endoscopy_mae1":
+                encoder = vit_base(img_size=[224])
+                print(self.type_pretrained)
+                pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-latest.pth.tar"
+                ckpt = torch.load(pth)
+                print(f"loaded from {pth} at epoch {ckpt['epoch']}")
+                encoder.load_state_dict(ckpt[self.type_encoder])
+            elif self.type_pretrained == "mae":
+                encoder = vit_base(img_size=[224])
+                print(self.type_pretrained)
+                pth = "/mnt/quanhd/ijepa_endoscopy_pretrained/mae_pretrain_vit_base.pth"
+                ckpt = torch.load(pth)
+                del ckpt["model"]["cls_token"]
+                ckpt["model"]["pos_embed"] = ckpt["model"]["pos_embed"][:, 1:, :]
+                encoder.load_state_dict(ckpt["model"])
+            elif self.type_pretrained == "none":
+                encoder = vit_base(img_size=[256])
+                print(self.type_pretrained)
+            elif self.type_pretrained == "im1k":
+                encoder = vit_huge(img_size=[448])
+                print(self.type_pretrained)
+                ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/splitted_target_encoder_IN1K-vit.h.16-448px-300e.pth.tar")
+                new_state_dict = load_state_dict_wo_module(ckpt)
+                encoder.load_state_dict(new_state_dict)
+            self.net = UNETRMultitask(img_size=self.img_size[0], backbone="ijepa", encoder=encoder)
+            self.net.to(self.device)
+        
 
     def init_optim(self):
+        if self.type_pretrained == "resnet":
+            backbone_name = "backbone"
+        else:
+            backbone_name = "encoder"
         base, head = [], []
         for name, param in self.net.named_parameters():
-            if 'encoder' in name:
+            if backbone_name in name:
                 base.append(param)
             else:
                 head.append(param)
@@ -192,24 +201,24 @@ class Trainer():
 
     def init_data_loader(self):
         train_dataset = Multitask(metadata_file=self.metadata_file, img_size=self.img_size, segmentation_classes=5, mode="train", root_path=self.root_path)
-        self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+        self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
         valid_dataset = Multitask(metadata_file=self.metadata_file, img_size=self.img_size, segmentation_classes=5, mode="test", root_path=self.root_path)
-        self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
+        self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False, drop_last=True)
 
     def run(self):
         for epoch in range(self.epoch_num):
-            # train_epoch_loss, train_head_lr, train_epoch_pos_loss, \
-            # train_epoch_dmg_loss, train_epoch_hp_loss, train_epoch_seg_loss = self.train_one_epoch()
+            train_epoch_loss, train_head_lr, train_epoch_pos_loss, \
+            train_epoch_dmg_loss, train_epoch_hp_loss, train_epoch_seg_loss = self.train_one_epoch()
 
-            # wandb.log({
-            #     "train_epoch_loss": train_epoch_loss,
-            #     "train_head_lr": train_head_lr,
-            #     "train_epoch_pos_loss": train_epoch_pos_loss,
-            #     "train_epoch_dmg_loss": train_epoch_dmg_loss,
-            #     "train_epoch_hp_loss": train_epoch_hp_loss,
-            #     "train_epoch_seg_loss": train_epoch_seg_loss,
-            # }, step=epoch)
+            wandb.log({
+                "train_epoch_loss": train_epoch_loss,
+                "train_head_lr": train_head_lr,
+                "train_epoch_pos_loss": train_epoch_pos_loss,
+                "train_epoch_dmg_loss": train_epoch_dmg_loss,
+                "train_epoch_hp_loss": train_epoch_hp_loss,
+                "train_epoch_seg_loss": train_epoch_seg_loss,
+            }, step=epoch)
 
 
 
@@ -252,9 +261,7 @@ class Trainer():
         steps_per_epoch = len(self.train_data_loader)
         self.net.train()
         epoch_loss = AverageMeter()
-        
-        # epoch_polyp_loss = AverageMeter()
-        # epoch_lesion_loss = AverageMeter()
+
         epoch_seg_loss = AverageMeter()
 
         epoch_pos_loss = AverageMeter()
@@ -278,7 +285,6 @@ class Trainer():
             loss2 = self.cls_loss(dmg_out, damage_label)
             loss3 = self.bi_cls_loss(hp_out, hp_label)   
             loss4 = self.seg_loss(seg_out, mask, segment_weight)
-            # loss5 = self.seg_loss(lesion_out, mask, segment_weight)
 
             loss = loss1 + loss2 + loss3 + loss4
 
@@ -288,7 +294,6 @@ class Trainer():
             epoch_dmg_loss.update(loss2.item())
             epoch_hp_loss.update(loss3.item())
             epoch_seg_loss.update(loss4.item())
-            # epoch_lesion_loss.update(loss5.item())
             epoch_loss.update(loss.item())
 
             loss.backward()
@@ -309,8 +314,6 @@ class Trainer():
         self.net.eval()
         epoch_loss = AverageMeter()
 
-        # epoch_polyp_loss = AverageMeter()
-        # epoch_lesion_loss = AverageMeter()
         epoch_seg_loss = AverageMeter()
 
         epoch_pos_loss = AverageMeter()
@@ -368,7 +371,6 @@ class Trainer():
                 loss2 = self.cls_loss(dmg_out, damage_label)
                 loss3 = self.bi_cls_loss(hp_out, hp_label)   
                 loss4 = self.seg_loss(seg_out, mask, segment_weight)
-                # loss5 = self.seg_loss(lesion_out, mask, segment_weight)
 
                 loss = loss1 + loss2 + loss3 + loss4
 
@@ -378,7 +380,6 @@ class Trainer():
                 epoch_dmg_loss.update(loss2.item())
                 epoch_hp_loss.update(loss3.item())
                 epoch_seg_loss.update(loss4.item())
-                # epoch_lesion_loss.update(loss5.item())
                 epoch_loss.update(loss.item())
 
                 epoch_micro_macro_ung_thu_thuc_quan_20230620.update(seg_out, mask, segment_weight, damage_label)

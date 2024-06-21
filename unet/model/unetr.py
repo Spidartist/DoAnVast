@@ -239,46 +239,6 @@ class UNETR(nn.Module):
                 x = self.fc1(x)
                 x = self.fc1_1(x)
                 return x
-        elif self.task == "multitask":
-            if use_skip_connection:
-                from_encoder = from_encoder[::-1]
-                z9 = self.deconv1(from_encoder[0])
-                z6 = self.deconv2(from_encoder[1])
-                z3 = self.deconv3(from_encoder[2])
-                z0 = self.deconv4(x)
-
-            else:
-                z9 = self.deconv1(z12)
-                z6 = self.deconv2(z9)
-                z3 = self.deconv3(z6)
-                z0 = self.deconv4(z3)
-
-            updated_from_encoder = [z9, z6, z3]
-
-            out_1 = self.avg_pool(last_z)
-            out_1 = self.fc1(out_1)
-            out_1 = self.fc1_1(out_1)
-
-            out_2 = self.avg_pool(last_z)
-            out_2 = self.fc2(out_2)
-            out_2 = self.fc2_1(out_2)
-
-            out_3 = self.avg_pool(last_z)
-            out_3 = self.fc3(out_3)
-            out_3 = self.fc3_1(out_3)
-
-            x = self.base(z12)
-            x = self.decoder(x, encoder_inputs=updated_from_encoder)
-            x = self.deconv_out(x)
-
-            x = torch.cat([x, z0], dim=1)
-            x = self.decoder_head(x)
-
-            x = self.out_conv(x)
-            if self.final_activation is not None:
-                x = self.final_activation(x)
-
-            return out_1, out_2, out_3, x
 
 class UNETRMultitask(nn.Module):
 

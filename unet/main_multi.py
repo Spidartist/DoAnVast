@@ -34,7 +34,7 @@ def run():
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     device = torch.device('cuda:0')
     torch.cuda.set_device(device)
-    device = 'cpu'
+    # device = 'cpu'
 
     trainer = Trainer(
                 device=device, type_pretrained=args.type_pretrained,

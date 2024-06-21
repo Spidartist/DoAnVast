@@ -7,6 +7,7 @@ from albumentations import augmentations
 import cv2
 import numpy as np
 import torch
+import random
 
 class Multitask(Dataset):
     """
@@ -79,8 +80,12 @@ class Multitask(Dataset):
                         self.test_samples.append([e, None, position_label, damage_label, seg_label, data["test_negative"]["label"]])
                     print(f"Processed {name}")
         if self.mode == "train":
+            # random.shuffle(self.train_samples)
+            # self.samples = self.train_samples[:int(len(self.train_samples)*0.1)]
             self.samples = self.train_samples
         else:
+            # random.shuffle(self.test_samples)
+            # self.samples = self.test_samples[:int(len(self.test_samples)*0.1)]
             self.samples = self.test_samples
 
     def aug(self, image, mask):
@@ -278,6 +283,12 @@ class Multitask(Dataset):
 
 
 if __name__ == "__main__":
+    # Ton thuong
+    mode = "train"
+    train_dataset = Multitask(segmentation_classes=5, mode="train", root_path="/home/s/DATA")
+
+    print(len(train_dataset.samples))
+
     # Ton thuong
     mode = "test"
     ds = Multitask(path="/mnt/quanhd/DoAn/unet/dataset/test_ton_thuong_dir.json", mode=mode)

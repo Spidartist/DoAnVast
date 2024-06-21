@@ -46,8 +46,8 @@ class WarmupCosineSchedule(object):
 
         for idx, group in enumerate(self.optimizer.param_groups):
             if idx == 0:
-                # group['lr'] = new_lr * 0.1
-                group['lr'] = new_lr
+                group['lr'] = new_lr * 0.1
+                # group['lr'] = new_lr
             elif idx == 1:
                 group['lr'] = new_lr
 

@@ -8,6 +8,7 @@ from loss.loss import DiceBCELoss, WeightedPosCELoss, WeightedBCELoss
 from score.score import DiceScore, IoUScore, MicroMacroDiceIoU
 from model.vit import vit_base, vit_huge
 from model.unetr import UNETR
+from model.vit_adapter import IJEPAAdapter
 from utils.lr import get_warmup_cosine_lr, WarmupCosineSchedule
 from utils.helper import load_state_dict_wo_module, AverageMeter, ScoreAverageMeter, GetItem, GetItemBinary
 
@@ -23,7 +24,7 @@ class Trainer():
             self, device, type_pretrained, type_damaged, json_path,
             root_path, wandb_token,  min_lr=2e-4, ref_lr=1e-3, task="segmentation", type_seg="TonThuong", type_cls="HP",
             num_freeze=10, max_lr=1e-6, img_size=256, type_opt="Adam", batch_size=16, accum_iter=16,
-            type_encoder="target_encoder", train_ratio=1.0
+            type_encoder="target_encoder", train_ratio=1.0, scale_lr=1
         ):
         self.device = device
         self.type_pretrained = type_pretrained
@@ -52,6 +53,7 @@ class Trainer():
         self.save_path = "/logs/"
         self.warmup_epochs = 6
         self.global_step = 0
+        self.scale_lr = True if scale_lr == 1 else False
 
         self.task = task
         self.type_seg = type_seg
@@ -121,6 +123,36 @@ class Trainer():
             ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500.pth.tar")
             encoder.load_state_dict(ckpt[self.type_encoder])
+        elif self.type_pretrained == "endoscopy_mae":
+            encoder = vit_base(img_size=[224])
+            print(self.type_pretrained)
+            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
+            ckpt = torch.load(pth)
+            print(f"loaded from {pth} at epoch {ckpt['epoch']}")
+            encoder.load_state_dict(ckpt[self.type_encoder])
+        elif self.type_pretrained == "endoscopy_mae_adapter":
+            encoder = IJEPAAdapter(pretrain_size=224)
+            print("Use adapter")
+            print(self.type_pretrained)
+            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
+            ckpt = torch.load(pth)
+            print(f"loaded from {pth} at epoch {ckpt['epoch']}")
+            encoder.load_state_dict(ckpt[self.type_encoder], strict=False)
+        elif self.type_pretrained == "endoscopy_mae1":
+            encoder = vit_base(img_size=[224])
+            print(self.type_pretrained)
+            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-latest.pth.tar"
+            ckpt = torch.load(pth)
+            print(f"loaded from {pth} at epoch {ckpt['epoch']}")
+            encoder.load_state_dict(ckpt[self.type_encoder])
+        elif self.type_pretrained == "mae":
+            encoder = vit_base(img_size=[224])
+            print(self.type_pretrained)
+            pth = "/mnt/quanhd/ijepa_endoscopy_pretrained/mae_pretrain_vit_base.pth"
+            ckpt = torch.load(pth)
+            del ckpt["model"]["cls_token"]
+            ckpt["model"]["pos_embed"] = ckpt["model"]["pos_embed"][:, 1:, :]
+            encoder.load_state_dict(ckpt["model"])
         elif self.type_pretrained == "none":
             encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
@@ -161,7 +193,7 @@ class Trainer():
 
     def init_logger(self):
         if self.task == "segmentation":
-            name = f"{self.type_opt}-{self.type_seg}-{self.type_damaged}-{self.type_encoder}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}-train_ratio:{self.train_ratio}"
+            name = f"{self.type_opt}-{self.type_seg}-{self.type_damaged}-{self.type_encoder}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}-train_ratio:{self.train_ratio}-scale_lr:{self.scale_lr}"
         elif self.task == "classification":
             name = f"{self.type_opt}-{self.type_cls}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
         wandb.login(key=self.wandb_token)
@@ -344,9 +376,13 @@ class Trainer():
                 img = img.float().to(self.device)
                 label = label.to(self.device)
 
-                lr = get_warmup_cosine_lr(self.BASE_LR, self.MAX_LR, self.global_step, total_steps, steps_per_epoch, warmup_epochs=self.warmup_epochs)
-                self.optimizer.param_groups[0]['lr'] = 0.1 * lr
-                self.optimizer.param_groups[1]['lr'] = lr
+                # lr = get_warmup_cosine_lr(self.BASE_LR, self.MAX_LR, self.global_step, total_steps, steps_per_epoch, warmup_epochs=self.warmup_epochs)
+                # if self.scale_lr:
+                #     self.optimizer.param_groups[0]['lr'] = 0.1 * lr
+                #     self.optimizer.param_groups[1]['lr'] = lr
+                # else:
+                #     self.optimizer.param_groups[0]['lr'] = lr
+                #     self.optimizer.param_groups[1]['lr'] = lr
 
                 cls_out = self.net(img)
 

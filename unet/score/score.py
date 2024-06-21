@@ -30,7 +30,7 @@ class DiceScore(nn.Module):
 class MicroMacroDiceIoU(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(MicroMacroDiceIoU, self).__init__()
-    def forward(self, inputs, targets, smooth=1):
+    def forward(self, inputs, targets, smooth=1e-6):
         inputs = torch.sigmoid(inputs)
         inputs[inputs < 0.5] = 0
         inputs[inputs >= 0.5] = 1
@@ -45,6 +45,35 @@ class MicroMacroDiceIoU(nn.Module):
         intersection2 = 2*tp
         total_area = 2 * tp + fp + fn
         return iou, dice, intersection, union, intersection2, total_area
+    
+class MicroMacroDiceIoUMultitask(nn.Module):
+    def __init__(self, weight=None, size_average=True):
+        super(MicroMacroDiceIoUMultitask, self).__init__()
+    def forward(self, inputs, targets, seg_weight: torch.Tensor, dmg_label, batch_dmg_labels: torch.Tensor, smooth=1e-6):
+        print(seg_weight)
+        print(batch_dmg_labels)
+        inputs = inputs[seg_weight != 0]
+        targets = targets[seg_weight != 0]
+        batch_dmg_labels = batch_dmg_labels[seg_weight != 0]
+        inputs = inputs[batch_dmg_labels == dmg_label]
+        targets = targets[batch_dmg_labels == dmg_label]
+        if inputs.shape[0] == 0:
+            return False, [0, 0, 0, 0, 0, 0]
+
+        inputs = torch.sigmoid(inputs)
+        inputs[inputs < 0.5] = 0
+        inputs[inputs >= 0.5] = 1
+
+        tp = (inputs * targets).sum(dim=(1, 2, 3))
+        fp = inputs.sum(dim=(1, 2, 3)) - tp
+        fn = targets.sum(dim=(1, 2, 3)) - tp
+        iou = (tp + smooth) / (tp + fp + fn + smooth)
+        dice = (2 * tp + smooth) / (2 * tp + fp + fn + smooth)
+        intersection = tp + smooth
+        union = tp + fp + fn + smooth
+        intersection2 = 2*tp + smooth
+        total_area = 2 * tp + fp + fn + smooth
+        return True, [iou, dice, intersection, union, intersection2, total_area]
     
 class FbetaScore(nn.Module):
     def __init__(self, weight=None, size_average=True, beta=1):

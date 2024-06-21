@@ -125,10 +125,14 @@ class PatchEmbed(nn.Module):
 
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=self.patch_size, stride=self.patch_size)
 
-    def forward(self, x):
-        B, C, H, W = x.shape
-        x = self.proj(x).flatten(2).transpose(1, 2)
-        return x
+    def forward(self, x, return_size=False):
+        x = self.proj(x)
+        _, _, H, W = x.shape
+        x = x.flatten(2).transpose(1, 2)
+        if return_size:
+            return x, H, W
+        else:
+            return x
     
 def drop_path(x, drop_prob: float = 0., training: bool = False):
     if drop_prob == 0. or not training:
@@ -258,6 +262,8 @@ class VisionTransformer(nn.Module):
                                             cls_token=False)
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
         self.depth = depth
+        self.drop_path_rate = drop_path_rate
+        self.norm_layer = partial(nn.LayerNorm, eps=1e-6)
         # --
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.blocks = nn.ModuleList([
@@ -302,7 +308,7 @@ class VisionTransformer(nn.Module):
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, masks=None, return_features=False):
+    def forward(self, x, masks=None, return_features=False, return_last=False):
         if masks is not None:
             if not isinstance(masks, list):
                 masks = [masks]
@@ -334,9 +340,13 @@ class VisionTransformer(nn.Module):
 
             if self.norm is not None:
                 x = self.norm(x)
-            x = self.convert_to_expected_dim(x)
+            # x = self.convert_to_expected_dim(x)
 
-            return x, list_from_encoder[:3]
+            # return x, list_from_encoder[:3]
+            if not return_last:
+                return list_from_encoder[3], list_from_encoder[:3]
+            else:
+                return x, list_from_encoder[3], list_from_encoder[:3]
 
         # -- fwd prop
         for i, blk in enumerate(self.blocks):

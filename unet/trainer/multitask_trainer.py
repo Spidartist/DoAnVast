@@ -141,25 +141,33 @@ class Trainer():
         self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
     
     def run(self):
-        for epoch in range(self.epoch_num):
-            if epoch == self.num_freeze:
-                self.net.unfreeze_encoder()
-
-
-            
-            
-            train_epoch_loss = self.train_one_epoch()
+        for epoch in range(self.epoch_num):            
+            train_epoch_loss, train_epoch_pos_loss, train_epoch_dmg_loss, train_epoch_seg_loss, \
+        train_epoch_pos_acc, train_epoch_dmg_acc, train_epoch_hp_acc = self.train_one_epoch()
             wandb.log(
                     {
                         "train_epoch_loss": train_epoch_loss,
+                        "train_epoch_pos_loss": train_epoch_pos_loss,
+                        "train_epoch_dmg_loss": train_epoch_dmg_loss,
+                        "train_epoch_seg_loss": train_epoch_seg_loss,
+                        "train_epoch_pos_acc": train_epoch_pos_acc,
+                        "train_epoch_dmg_acc": train_epoch_dmg_acc,
+                        "train_epoch_hp_acc": train_epoch_hp_acc,
                     },
                     step=epoch 
                 )
-            valid_epoch_loss, micro_dice_score, micro_iou_score, macro_dice_score, macro_iou_score, vis_image = self.valid_one_epoch()
+            valid_epoch_loss, val_epoch_pos_loss, val_epoch_dmg_loss, val_epoch_seg_loss, \
+        val_epoch_pos_acc, val_epoch_dmg_acc, val_epoch_hp_acc, micro_dice_score, micro_iou_score, macro_dice_score, macro_iou_score, vis_image = self.valid_one_epoch()
 
             wandb.log(
                 {
                     "valid_loss": valid_epoch_loss,
+                    "val_epoch_pos_loss": val_epoch_pos_loss,
+                    "val_epoch_dmg_loss": val_epoch_dmg_loss,
+                    "val_epoch_seg_loss": val_epoch_seg_loss,
+                    "val_epoch_pos_acc": val_epoch_pos_acc,
+                    "val_epoch_dmg_acc": val_epoch_dmg_acc,
+                    "val_epoch_hp_acc": val_epoch_hp_acc,
                     "valid_micro_dice_score": micro_dice_score,
                     "valid_micro_iou_score": micro_iou_score,
                     "valid_macro_dice_score": macro_dice_score,
@@ -181,7 +189,6 @@ class Trainer():
         epoch_dmg_loss = 0
         epoch_seg_loss = 0
         epoch_hp_loss = 0
-        epoch_dice_score = []
 
         # total_pos: total number of records that have position label
         total_pos_correct = 0
@@ -242,22 +249,14 @@ class Trainer():
             loss.backward()
             self.optimizer.step()
 
-            with torch.no_grad():
-                self.net.eval()
-                score = self.dice_score(seg_out, mask, segment_weight)
-                epoch_dice_score.append(score.item())
-
-            # if global_step % self.save_freq == 0 or global_step == total_steps-1:
-            #     torch.save(self.net.state_dict(), self.save_path + f'/model-{self.type_pretrained}-{self.type_damaged}-best.pt')
-
             self.global_step += 1
         epoch_pos_acc = np.nan if total_pos == 0 else total_pos_correct/total_pos
         epoch_dmg_acc = np.nan if total_dmg == 0 else total_dmg_correct/total_dmg 
         epoch_hp_acc = np.nan if total_hp == 0 else total_hp_correct/total_hp
 
 
-        return epoch_loss.sum, epoch_pos_loss, epoch_dmg_loss, epoch_seg_loss, \
-        epoch_seg_loss, epoch_pos_acc, epoch_dmg_acc, epoch_hp_acc, sum(epoch_dice_score)/len(epoch_dice_score)
+        return epoch_loss.avg, epoch_pos_loss, epoch_dmg_loss, epoch_seg_loss, \
+        epoch_pos_acc, epoch_dmg_acc, epoch_hp_acc
 
     def valid_one_epoch(self):
         steps_per_epoch = len(self.valid_data_loader)
@@ -269,7 +268,12 @@ class Trainer():
         epoch_seg_loss = 0
         epoch_hp_loss = 0
         vis_image = None
-        epoch_dice_score = []
+        epoch_dice_score = ScoreAverageMeter(self.device)
+        epoch_iou_score = ScoreAverageMeter(self.device)
+        epoch_intersection = ScoreAverageMeter(self.device)
+        epoch_union = ScoreAverageMeter(self.device)
+        epoch_intersection2 = ScoreAverageMeter(self.device)
+        epoch_total_area = ScoreAverageMeter(self.device)
 
         # total_pos: total number of records that have position label
         total_pos_correct = 0
@@ -319,12 +323,19 @@ class Trainer():
                 epoch_seg_loss += loss3
                 epoch_hp_loss += loss4
 
+                iou, dice, intersection, union, intersection2, total_area = self.dice_IoU(seg_out, mask)
+                epoch_iou_score.update(iou.to(self.device))
+                epoch_dice_score.update(dice.to(self.device))
+                epoch_intersection.update(intersection.to(self.device))
+                epoch_union.update(union.to(self.device))
+                epoch_intersection2.update(intersection2.to(self.device))
+                epoch_total_area.update(total_area.to(self.device))
+
                 total_pos_correct += self.get_item(pos_out, position_label)
                 total_dmg_correct += self.get_item(dmg_out, damage_label)
                 total_hp_correct += self.get_item_binary(hp_out, hp_label)
 
-                score = self.dice_score(seg_out, mask, segment_weight)
-                epoch_dice_score.append(score.item())
+
 
             seg_img = seg_out[0]
             seg_img[seg_img <= 0.5] = 0
@@ -333,12 +344,18 @@ class Trainer():
             images = torch.cat([seg_img, mask[0]], dim=1)
             images = wandb.Image(images)
             vis_image = images
+        
+        micro_iou_score = epoch_intersection.lst_tensor.sum()/epoch_union.lst_tensor.sum()
+        micro_dice_score = epoch_intersection2.lst_tensor.sum()/epoch_total_area.lst_tensor.sum()
+        macro_iou_score = epoch_iou_score.lst_tensor.mean()
+        macro_dice_score = epoch_dice_score.lst_tensor.mean()
 
         epoch_pos_acc = np.nan if total_pos == 0 else total_pos_correct/total_pos
         epoch_dmg_acc = np.nan if total_dmg == 0 else total_dmg_correct/total_dmg 
         epoch_hp_acc = np.nan if total_hp == 0 else total_hp_correct/total_hp
 
-        return epoch_loss.sum, epoch_pos_loss, epoch_dmg_loss, epoch_seg_loss, \
-        epoch_seg_loss, epoch_pos_acc, epoch_dmg_acc, epoch_hp_acc, sum(epoch_dice_score)/len(epoch_dice_score), vis_image
+        return epoch_loss.avg, epoch_pos_loss, epoch_dmg_loss, epoch_seg_loss, \
+        epoch_pos_acc, epoch_dmg_acc, epoch_hp_acc, \
+        micro_dice_score, micro_iou_score, macro_dice_score, macro_iou_score, vis_image
 
 

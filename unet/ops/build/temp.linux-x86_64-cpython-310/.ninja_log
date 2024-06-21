@@ -1,0 +1,8 @@
+# ninja log v5
+0	4808	1717847698519586076	/mnt/tuyenld/ViT-Adapter/detection/ops/build/temp.linux-x86_64-cpython-310/mnt/tuyenld/ViT-Adapter/detection/ops/src/cpu/ms_deform_attn_cpu.o	dee64d9240d5d835
+0	16093	1717847709759609456	/mnt/tuyenld/ViT-Adapter/detection/ops/build/temp.linux-x86_64-cpython-310/mnt/tuyenld/ViT-Adapter/detection/ops/src/vision.o	2b6176b844cce480
+14	5203	1717848245646000558	/mnt/tuyenld/ViT-Adapter/detection/ops/build/temp.linux-x86_64-cpython-310/mnt/tuyenld/ViT-Adapter/detection/ops/src/cpu/ms_deform_attn_cpu.o	dee64d9240d5d835
+11	5074	1717848665907655154	/mnt/tuyenld/ViT-Adapter/detection/ops/build/temp.linux-x86_64-cpython-310/mnt/tuyenld/ViT-Adapter/detection/ops/src/cpu/ms_deform_attn_cpu.o	dee64d9240d5d835
+12	5066	1717848935444544449	/mnt/tuyenld/ViT-Adapter/detection/ops/build/temp.linux-x86_64-cpython-310/mnt/tuyenld/ViT-Adapter/detection/ops/src/cpu/ms_deform_attn_cpu.o	dee64d9240d5d835
+10	4918	1717849100353051475	/mnt/tuyenld/ViT-Adapter/detection/ops/build/temp.linux-x86_64-cpython-310/mnt/tuyenld/ViT-Adapter/detection/ops/src/cpu/ms_deform_attn_cpu.o	dee64d9240d5d835
+10	17535	1717849113001089506	/mnt/tuyenld/ViT-Adapter/detection/ops/build/temp.linux-x86_64-cpython-310/mnt/tuyenld/ViT-Adapter/detection/ops/src/cuda/ms_deform_attn_cuda.o	512540c17238b348

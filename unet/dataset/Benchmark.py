@@ -46,18 +46,34 @@ class Benchmark(Dataset):
     
     def aug(self, image, mask):
         if self.mode == 'train':
-            t1 = A.Compose([A.Resize(self.img_size, self.img_size),])
-            resized = t1(image=image, mask=mask)
-            image = resized['image']
-            mask = resized['mask']
-            t = A.Compose([                
-                A.HorizontalFlip(p=0.7),
-                A.VerticalFlip(p=0.7),
-                A.Rotate(interpolation=cv2.BORDER_CONSTANT, p=0.7),
-                A.ShiftScaleRotate(border_mode=cv2.BORDER_CONSTANT, shift_limit=0.5, scale_limit=0.2, p=0.7),
-                A.ShiftScaleRotate(border_mode=cv2.BORDER_CONSTANT, shift_limit=0, scale_limit=(-0.1, 0.1), rotate_limit=0, p=0.35),
-                A.MotionBlur(p=0.2),
-                A.HueSaturationValue(p=0.2),                
+            # t1 = A.Compose([A.Resize(self.img_size, self.img_size),])
+            # resized = t1(image=image, mask=mask)
+            # image = resized['image']
+            # mask = resized['mask']
+
+            # t = A.Compose([                
+            #     A.HorizontalFlip(p=0.7),
+            #     A.VerticalFlip(p=0.7),
+            #     A.Rotate(interpolation=cv2.BORDER_CONSTANT, p=0.7),
+            #     A.ShiftScaleRotate(border_mode=cv2.BORDER_CONSTANT, shift_limit=0.5, scale_limit=0.2, p=0.7),
+            #     A.ShiftScaleRotate(border_mode=cv2.BORDER_CONSTANT, shift_limit=0, scale_limit=(-0.1, 0.1), rotate_limit=0, p=0.35),
+            #     A.MotionBlur(p=0.2),
+            #     A.HueSaturationValue(p=0.2),                
+            # ], p=0.5)
+
+            t = A.Compose([
+                A.RandomRotate90(),
+                A.Flip(),
+                # A.D4(),
+                A.HueSaturationValue(),
+                A.RandomBrightnessContrast(),
+                A.GridDistortion(),
+                A.MotionBlur(),
+                A.OneOf([
+                    A.RandomCrop(224, 224, p=1),
+                    A.CenterCrop(224, 224, p=1)
+                ], p=0.2),
+                A.Resize(self.img_size, self.img_size),
             ], p=0.5)
 
         elif self.mode == 'test':

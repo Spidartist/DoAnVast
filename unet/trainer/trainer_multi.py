@@ -340,6 +340,7 @@ class Trainer():
         total_hp = 0
 
 
+
         tk0 = tqdm(self.valid_data_loader, total=steps_per_epoch)
         with torch.no_grad():
             for data in tk0:

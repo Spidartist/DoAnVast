@@ -4,13 +4,15 @@ from dataset.Polyp import Polyp
 from dataset.Benchmark import Benchmark
 from dataset.ViTri import ViTri
 from dataset.HP import HP
-from loss.loss import DiceBCELoss, WeightedPosCELoss, WeightedBCELoss
+from loss.loss import DiceBCELoss, WeightedPosCELoss, WeightedBCELoss, structure_loss
 from score.score import DiceScore, IoUScore, MicroMacroDiceIoU
 from model.vit import vit_base, vit_huge
-from model.unetr import UNETR
-from model.vit_adapter import IJEPAAdapter
+# from model.unetr import UNETR
+# from model.vit_adapter import IJEPAAdapter
 from utils.lr import get_warmup_cosine_lr, WarmupCosineSchedule
 from utils.helper import load_state_dict_wo_module, AverageMeter, ScoreAverageMeter, GetItem, GetItemBinary
+from model.utils import Feature2Pyramid, EncoderDecoderRaBiT
+import torch.nn.functional as F
 
 import torch
 import torch.optim as optim
@@ -48,7 +50,7 @@ class Trainer():
         # elif self.type_pretrained == "im1k":
         #     # self.img_size = (448, 448)
         #     self.batch_size = 1
-        self.epoch_num = 60
+        self.epoch_num = 20
         self.save_freq = 1
         self.save_path = "/logs/"
         self.warmup_epochs = 6
@@ -80,7 +82,8 @@ class Trainer():
         print('model has {} parameters in total'.format(sum(x.numel() for x in self.net.parameters())))
 
     def init_loss(self):
-        self.seg_loss = DiceBCELoss().to(self.device)
+        # self.seg_loss = DiceBCELoss().to(self.device)
+        self.seg_loss = structure_loss
         self.cls_loss = WeightedPosCELoss().cuda()
         self.bi_cls_loss = WeightedBCELoss().cuda()
 
@@ -130,14 +133,14 @@ class Trainer():
             ckpt = torch.load(pth)
             print(f"loaded from {pth} at epoch {ckpt['epoch']}")
             encoder.load_state_dict(ckpt[self.type_encoder])
-        elif self.type_pretrained == "endoscopy_mae_adapter":
-            encoder = IJEPAAdapter(pretrain_size=224)
-            print("Use adapter")
-            print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
-            ckpt = torch.load(pth)
-            print(f"loaded from {pth} at epoch {ckpt['epoch']}")
-            encoder.load_state_dict(ckpt[self.type_encoder], strict=False)
+        # elif self.type_pretrained == "endoscopy_mae_adapter":
+        #     encoder = IJEPAAdapter(pretrain_size=224)
+        #     print("Use adapter")
+        #     print(self.type_pretrained)
+        #     pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
+        #     ckpt = torch.load(pth)
+        #     print(f"loaded from {pth} at epoch {ckpt['epoch']}")
+        #     encoder.load_state_dict(ckpt[self.type_encoder], strict=False)
         elif self.type_pretrained == "endoscopy_mae_final":
             encoder = vit_base(img_size=[224])
             print(self.type_pretrained)
@@ -163,13 +166,15 @@ class Trainer():
             new_state_dict = load_state_dict_wo_module(ckpt)
             encoder.load_state_dict(new_state_dict)
         if self.task == "segmentation":
-            self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder)
-        elif self.task == "classification":
-            if self.type_cls == "HP":
-                self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder, task="classification", type_cls="HP")
-            elif self.type_cls == "vitri":
-                self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder, task="classification", type_cls="vitri")
-        self.net.to(self.device)
+            encoder = encoder.to(self.device)
+            neck = Feature2Pyramid(embed_dim=768, rescales=[4, 2, 1, 0.5]).to(self.device)
+            self.net = EncoderDecoderRaBiT(encoder, neck).to(self.device)
+        # elif self.task == "classification":
+        #     if self.type_cls == "HP":
+        #         self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder, task="classification", type_cls="HP")
+        #     elif self.type_cls == "vitri":
+        #         self.net = UNETR(img_size=self.img_size[0], backbone="ijepa", encoder=encoder, task="classification", type_cls="vitri")
+        # self.net.to(self.device)
         # if self.num_freeze > 0:
         #     self.net.freeze_encoder()
 
@@ -198,7 +203,7 @@ class Trainer():
             name = f"{self.type_opt}-{self.type_cls}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
         wandb.login(key=self.wandb_token)
         wandb.init(
-            project=self.type_seg+"4",
+            project=self.type_seg+"5",
             name=name,
             config={
                 "batch": self.batch_size,
@@ -331,37 +336,48 @@ class Trainer():
         steps_per_epoch = len(self.train_data_loader)
         total_steps = steps_per_epoch * self.epoch_num
         self.net.train()
+        size_rates = [0.7, 1, 1.37]
+
         if self.task == "segmentation":
             epoch_loss = AverageMeter()
 
             tk0 = tqdm(self.train_data_loader, total=steps_per_epoch)
             for batch_idx, data in enumerate(tk0):
-                img, mask = data
-                n = img.shape[0]
+                for rate in size_rates: 
+                    img, mask = data
+                    n = img.shape[0]
 
-                img = img.float().to(self.device)
-                mask = mask.float().to(self.device)
+                    img = img.float().to(self.device)
+                    mask = mask.float().to(self.device)
+                    # ---- rescale ----
+                    trainsize = int(round(self.img_size[0]*rate/32)*32)
+                    images = F.interpolate(img, size=(trainsize, trainsize), mode='bilinear', align_corners=True)
+                    mask = F.interpolate(mask, size=(trainsize, trainsize), mode='bilinear', align_corners=True)
 
-                # lr = get_warmup_cosine_lr(self.BASE_LR, self.MAX_LR, self.global_step, total_steps, steps_per_epoch, warmup_epochs=self.warmup_epochs)
-                # self.optimizer.param_groups[0]['lr'] = 0.1 * lr
-                # self.optimizer.param_groups[1]['lr'] = lr
+                    # lr = get_warmup_cosine_lr(self.BASE_LR, self.MAX_LR, self.global_step, total_steps, steps_per_epoch, warmup_epochs=self.warmup_epochs)
+                    # self.optimizer.param_groups[0]['lr'] = 0.1 * lr
+                    # self.optimizer.param_groups[1]['lr'] = lr
 
-                seg_out = self.net(img)
+                    map4, map3, map2, map1 = self.net(images)
+                    map1 = F.interpolate(map1, size=(trainsize, trainsize), mode='bilinear', align_corners=True)
+                    map2 = F.interpolate(map2, size=(trainsize, trainsize), mode='bilinear', align_corners=True)
+                    map3 = F.interpolate(map3, size=(trainsize, trainsize), mode='bilinear', align_corners=True)
+                    map4 = F.interpolate(map4, size=(trainsize, trainsize), mode='bilinear', align_corners=True)
+                    loss3 = self.seg_loss(map1, mask) + self.seg_loss(map2, mask) + self.seg_loss(map3, mask) + self.seg_loss(map4, mask)
 
-                loss3 = self.seg_loss(seg_out, mask, 1)
+                    loss3 = loss3 / self.accum_iter
 
-                loss3 = loss3 / self.accum_iter
+                    epoch_loss.update(loss3.item(), n=n)
+                    loss3.backward()
 
-                epoch_loss.update(loss3.item(), n=n)
-                loss3.backward()
+                    if ((batch_idx + 1) % self.accum_iter == 0) or (batch_idx + 1 == len(tk0)):
+                        if rate == size_rates[-1]:
+                            self.lr_scheduler.step()
+                        self.optimizer.step()
+                        self.optimizer.zero_grad()
 
-                if ((batch_idx + 1) % self.accum_iter == 0) or (batch_idx + 1 == len(tk0)):
-                    self.lr_scheduler.step()
-                    self.optimizer.step()
-                    self.optimizer.zero_grad()
-
-                # if global_step % self.save_freq == 0 or global_step == total_steps-1:
-                #     torch.save(self.net.state_dict(), self.save_path + f'/model-{self.type_pretrained}-{self.type_damaged}-best.pt')
+                    # if global_step % self.save_freq == 0 or global_step == total_steps-1:
+                    #     torch.save(self.net.state_dict(), self.save_path + f'/model-{self.type_pretrained}-{self.type_damaged}-best.pt')
 
                 self.global_step += 1
 
@@ -425,13 +441,14 @@ class Trainer():
                     img = img.float().to(self.device)
                     mask = mask.float().to(self.device)
 
-                    seg_out = self.net(img)
+                    res, _, _, _ = self.net(img)
+                    res = F.interpolate(res, size=(self.img_size[0], self.img_size[0]), mode='bilinear', align_corners=False)
 
-                    loss3 = self.seg_loss(seg_out, mask, 1)
+                    loss3 = self.seg_loss(res, mask, 1)
 
                     epoch_loss.update(loss3.item(), n=n)
 
-                    iou, dice, intersection, union, intersection2, total_area = self.dice_IoU(seg_out, mask)
+                    iou, dice, intersection, union, intersection2, total_area = self.dice_IoU(res, mask)
                     # print(iou)
                     # print(intersection)
                     epoch_iou_score.update(iou.to(self.device))
@@ -441,7 +458,7 @@ class Trainer():
                     epoch_intersection2.update(intersection2.to(self.device))
                     epoch_total_area.update(total_area.to(self.device))
 
-                    seg_img = seg_out[0]
+                    seg_img = res[0]
                     seg_img[seg_img <= 0.5] = 0
                     seg_img[seg_img > 0.5] = 1
 

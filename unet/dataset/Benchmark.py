@@ -49,12 +49,10 @@ class Benchmark(Dataset):
                     kvasir_mask_paths.append(mask_path)
                 else:
                     clinic_mask_paths.append(mask_path)
-            print(f"Pre len(all_image_paths) = {len(all_image_paths)}")
+            print(f"Pre len(all_image_paths) =s {len(all_image_paths)}")
             print(f"Pre len(all_mask_paths) = {len(all_mask_paths)}")
-            kvasir_image_paths[:int(len(kvasir_image_paths)*self.train_ratio)].extend(clinic_image_paths[:int(len(clinic_image_paths)*self.train_ratio)])
-            kvasir_mask_paths[:int(len(kvasir_mask_paths)*self.train_ratio)].extend(clinic_mask_paths[:int(len(clinic_mask_paths)*self.train_ratio)])
-            self.image_paths = kvasir_image_paths
-            self.mask_paths = kvasir_mask_paths
+            self.image_paths = kvasir_image_paths[:int(len(kvasir_image_paths)*self.train_ratio)] + clinic_image_paths[:int(len(clinic_image_paths)*self.train_ratio)]
+            self.mask_paths = kvasir_mask_paths[:int(len(kvasir_mask_paths)*self.train_ratio)] + clinic_mask_paths[:int(len(clinic_mask_paths)*self.train_ratio)]
             print(f"After len(image_paths) = {len(self.image_paths)}")
             print(f"After len(mask_paths) = {len(self.mask_paths)}")
         elif self.mode == "test":

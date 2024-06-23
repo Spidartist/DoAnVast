@@ -7,7 +7,7 @@ from model.unetr import UNETRMultitask
 from model.unet import Unet
 # from model.vit_adapter import IJEPAAdapter
 from utils.lr import get_warmup_cosine_lr, WarmupCosineSchedule
-from utils.helper import load_state_dict_wo_module, AverageMeter, MicroMacroMeter, GetItem, GetItemBinary
+from utils.helper import load_state_dict_wo_module, AverageMeter, MicroMacroMeter, GetItem, GetItemBinary, ConfMatObj
 import numpy as np
 import torch
 import torch.optim as optim
@@ -229,10 +229,14 @@ class Trainer():
             val_epoch_micro_macro_viem_loet_hoanh_ta_trang, \
             val_epoch_micro_macro_ung_thu_da_day, \
             val_epoch_micro_macro_viem_da_day, \
-            val_epoch_micro_macro_polyp = self.valid_one_epoch()
+            val_epoch_micro_macro_polyp, \
+            conf_img_pos, conf_img_dmg, conf_img_hp = self.valid_one_epoch()
 
             wandb.log(
                 {
+                    "conf_img_pos": conf_img_pos,
+                    "conf_img_dmg": conf_img_dmg,
+                    "conf_img_hp": conf_img_hp,
                     "valid_loss": val_epoch_loss,
                     "val_epoch_macro_dice_ung_thu_thuc_quan": val_epoch_micro_macro_ung_thu_thuc_quan[3],
                     "val_epoch_micro_dice_ung_thu_thuc_quan": val_epoch_micro_macro_ung_thu_thuc_quan[1],
@@ -339,7 +343,7 @@ class Trainer():
         total_hp_correct = 0
         total_hp = 0
 
-
+        ConfMatGen = ConfMatObj()
 
         tk0 = tqdm(self.valid_data_loader, total=steps_per_epoch)
         with torch.no_grad():
@@ -367,6 +371,7 @@ class Trainer():
                 total_pos_correct += self.get_item(pos_out, position_label)
                 total_dmg_correct += self.get_item(dmg_out, damage_label)
                 total_hp_correct += self.get_item_binary(hp_out, hp_label)
+                ConfMatGen.add(pos_out, dmg_out, hp_out, position_label, damage_label, hp_label)
 
                 loss1 = self.cls_loss(pos_out, position_label)
                 loss2 = self.cls_loss(dmg_out, damage_label)
@@ -395,6 +400,15 @@ class Trainer():
             epoch_dmg_acc = np.nan if total_dmg == 0 else total_dmg_correct/total_dmg 
             epoch_hp_acc = np.nan if total_hp == 0 else total_hp_correct/total_hp
 
+            conf_img_pos = ConfMatGen.ret_confmat("pos")
+            conf_img_dmg = ConfMatGen.ret_confmat("dmg")
+            conf_img_hp = ConfMatGen.ret_confmat("hp")
+
+            conf_img_pos = wandb.Image(conf_img_pos)
+            conf_img_dmg = wandb.Image(conf_img_dmg)
+            conf_img_hp = wandb.Image(conf_img_hp)
+
+
             return epoch_loss.avg, epoch_pos_loss.avg, epoch_dmg_loss.avg, epoch_hp_loss.avg, \
                     epoch_seg_loss.avg, epoch_pos_acc, epoch_dmg_acc, epoch_hp_acc,\
                     epoch_micro_macro_ung_thu_thuc_quan_20230620.ret_val(), \
@@ -402,5 +416,6 @@ class Trainer():
                     epoch_micro_macro_viem_loet_hoanh_ta_trang_20230620.ret_val(), \
                     epoch_micro_macro_ung_thu_da_day_20230620.ret_val(), \
                     epoch_micro_macro_viem_da_day_20230620.ret_val(), \
-                    epoch_micro_macro_polyp.ret_val()
+                    epoch_micro_macro_polyp.ret_val(), \
+                    conf_img_pos, conf_img_dmg, conf_img_hp
 

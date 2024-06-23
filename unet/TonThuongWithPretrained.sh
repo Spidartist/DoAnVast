@@ -25,10 +25,10 @@
 # python main.py --task classification --type_cls HP --type_pretrained im1k --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "1" --batch_size 1 --type_opt "AdamW" --type_encoder "target_encoder"
 # python main.py --task classification --type_cls vitri --type_pretrained im1k --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "1" --batch_size 1 --type_opt "AdamW" --type_encoder "target_encoder"
 
-python main.py --task classification --type_cls HP --type_pretrained endoscopy3 --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "1" --batch_size 4 --type_opt "AdamW" --type_encoder "target_encoder"
-python main.py --task classification --type_cls HP --type_pretrained endoscopy4 --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "1" --batch_size 4 --type_opt "AdamW" --type_encoder "target_encoder"
-python main.py --task classification --type_cls vitri --type_pretrained endoscopy3 --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "1" --batch_size 4 --type_opt "AdamW" --type_encoder "target_encoder"
-python main.py --task classification --type_cls vitri --type_pretrained endoscopy4 --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "1" --batch_size 4 --type_opt "AdamW" --type_encoder "target_encoder"
+# python main.py --task classification --type_cls HP --type_pretrained endoscopy3 --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "1" --batch_size 4 --type_opt "AdamW" --type_encoder "target_encoder"
+# python main.py --task classification --type_cls HP --type_pretrained endoscopy4 --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "1" --batch_size 4 --type_opt "AdamW" --type_encoder "target_encoder"
+# python main.py --task classification --type_cls vitri --type_pretrained endoscopy3 --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "1" --batch_size 4 --type_opt "AdamW" --type_encoder "target_encoder"
+# python main.py --task classification --type_cls vitri --type_pretrained endoscopy4 --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "1" --batch_size 4 --type_opt "AdamW" --type_encoder "target_encoder"
 
 
 # python main.py --type_damaged ung_thu_da_day_20230620 --type_pretrained endoscopy2 --root_path "/mnt/tuyenld/data/endoscopy/" --type_seg "TonThuong" --num_freeze 0 --lr 1e-3

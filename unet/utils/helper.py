@@ -2,6 +2,9 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 from score.score import MicroMacroDiceIoUMultitask
+import numpy as np
+import matplotlib.pyplot as plt
+from torchmetrics.classification import ConfusionMatrix
 
 def load_state_dict_wo_module(state_dict):
     new_state_dict = OrderedDict()
@@ -9,6 +12,46 @@ def load_state_dict_wo_module(state_dict):
         name = k[7:] # remove `module.`
         new_state_dict[name] = v
     return new_state_dict
+
+class ConfMatObj:
+    def __init__(self):
+        self.pred = {}
+        self.gt = {}
+        self.key_lst = ["pos", "dmg", "hp"]
+    def add(self, pos_out, dmg_out, hp_out, pos_label, dmg_label, hp_label):
+        for k, out, label in zip(self.key_lst, [pos_out, dmg_out, hp_out], [pos_label, dmg_label, hp_label]):
+            if k != "hp":
+                preds = out[label != -1]
+            else:
+                preds = torch.flatten(out[label != -1]).sigmoid()
+            gts = label[label != -1]
+            if k in self.pred:
+                self.pred[k] = torch.cat((self.pred[k], preds))
+                self.gt[k] = torch.cat((self.gt[k], gts))
+            else:
+                self.pred[k] = preds
+                self.gt[k] = gts
+    def ret_confmat(self, k):
+        if k == "pos":
+            class_names = ["Hầu họng", "Thực quản", "Tam vị", "Thân vị", "Phình vị", "Hang vị", "Bờ cong lớn", "Bờ cong nhỏ", "Hành tá tràng", "Tá tràng"]
+            confmat = ConfusionMatrix(task="multiclass", num_classes=10)
+            pred = self.pred[k]
+            gts = self.gts[k]
+        elif k == "dmg":
+            class_names = ["VTGP", "UTTQ", "VTQ", "VLHTT", "UTDD", "VDD", "HP", "POLYP"]
+            confmat = ConfusionMatrix(task="multiclass", num_classes=8)
+            pred = self.pred[k]
+            gts = self.gts[k]
+        elif k == "hp":
+            class_names = ["Lành tính", "Ác tính"]
+            confmat = ConfusionMatrix(task="binary", num_classes=2)
+            pred = self.pred[k]
+            gts = self.gts[k]
+        confusion_matrix = confmat(pred, gts)
+        conf_img = plot_confusion_matrix(confusion_matrix, class_names, normalize=True)
+
+        return conf_img
+
 
 class AverageMeter(object):
     def __init__(self):
@@ -25,6 +68,49 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+def plot_confusion_matrix(cm, class_names, normalize=False):
+    """
+    Plots a confusion matrix using matplotlib.
+
+    Args:
+    cm (array, shape = [n, n]): confusion matrix
+    class_names (list): List of class names
+    normalize (bool): Whether to normalize the values to percentages
+    """
+    cm = cm.cpu().numpy()
+    if normalize:
+        cm = np.nan_to_num(cm.astype('float') / (cm.sum(axis=1)[:, np.newaxis] + 1e-7))
+
+    # Big size
+    fig, ax = plt.subplots(figsize=(12, 12))
+    cax = ax.matshow(cm, cmap='Blues')
+
+    ax.set_title('Confusion matrix')
+    fig.colorbar(cax)
+    ax.set_xlabel('Predicted')
+    ax.set_ylabel('True')
+    
+    tick_marks = np.arange(len(class_names))
+    ax.set_xticks(tick_marks, class_names, rotation=45)
+    ax.set_yticks(tick_marks, class_names)
+
+    fmt = '.2%' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i, j in np.ndindex(cm.shape):
+        ax.text(j, i, format(cm[i, j], fmt),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+    
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png')
+    plt.close(fig)
+    buf.seek(0)
+    image = np.frombuffer(buf.getvalue(), dtype=np.uint8)
+    buf.close()
+    # To HWC
+    image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+    return image
 
 class MicroMacroMeter(object):
     def __init__(self, device, dmg_label):

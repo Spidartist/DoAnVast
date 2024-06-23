@@ -8,7 +8,7 @@ from loss.loss import DiceBCELoss, WeightedPosCELoss, WeightedBCELoss
 from score.score import DiceScore, IoUScore, MicroMacroDiceIoU
 from model.vit import vit_base, vit_huge
 from model.unetr import UNETR
-from model.vit_adapter import IJEPAAdapter
+# from model.vit_adapter import IJEPAAdapter
 from utils.lr import get_warmup_cosine_lr, WarmupCosineSchedule
 from utils.helper import load_state_dict_wo_module, AverageMeter, ScoreAverageMeter, GetItem, GetItemBinary
 
@@ -114,7 +114,7 @@ class Trainer():
         elif self.type_pretrained == "endoscopy3":
             encoder = vit_base(img_size=[256])
             print(self.type_pretrained)
-            ckpt = torch.load("/mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
+            ckpt = torch.load("/root/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
             print("loaded from /mnt/quanhd/ijepa_endoscopy_pretrained/jepa-ep500-non-crop.pth.tar")
             encoder.load_state_dict(ckpt[self.type_encoder])
         elif self.type_pretrained == "endoscopy4":
@@ -126,29 +126,29 @@ class Trainer():
         elif self.type_pretrained == "endoscopy_mae":
             encoder = vit_base(img_size=[224])
             print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
+            pth = "/root/quanhd/ijepa_endoscopy_pretrained/jepa_continue_mae-ep400.pth.tar"
             ckpt = torch.load(pth)
             print(f"loaded from {pth} at epoch {ckpt['epoch']}")
             encoder.load_state_dict(ckpt[self.type_encoder])
-        elif self.type_pretrained == "endoscopy_mae_adapter":
-            encoder = IJEPAAdapter(pretrain_size=224)
-            print("Use adapter")
-            print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
-            ckpt = torch.load(pth)
-            print(f"loaded from {pth} at epoch {ckpt['epoch']}")
-            encoder.load_state_dict(ckpt[self.type_encoder], strict=False)
+        # elif self.type_pretrained == "endoscopy_mae_adapter":
+        #     encoder = IJEPAAdapter(pretrain_size=224)
+        #     print("Use adapter")
+        #     print(self.type_pretrained)
+        #     pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
+        #     ckpt = torch.load(pth)
+        #     print(f"loaded from {pth} at epoch {ckpt['epoch']}")
+        #     encoder.load_state_dict(ckpt[self.type_encoder], strict=False)
         elif self.type_pretrained == "endoscopy_mae_final":
             encoder = vit_base(img_size=[224])
             print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-latest.pth.tar"
+            pth = "/root/quanhd/ijepa_endoscopy_pretrained/jepa-continue_mae_ep590.pth.tar"
             ckpt = torch.load(pth)
             print(f"loaded from {pth} at epoch {ckpt['epoch']}")
             encoder.load_state_dict(ckpt[self.type_encoder])
         elif self.type_pretrained == "mae":
             encoder = vit_base(img_size=[224])
             print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_endoscopy_pretrained/mae_pretrain_vit_base.pth"
+            pth = "/root/quanhd/ijepa_endoscopy_pretrained/mae_pretrain_vit_base.pth"
             ckpt = torch.load(pth)
             del ckpt["model"]["cls_token"]
             ckpt["model"]["pos_embed"] = ckpt["model"]["pos_embed"][:, 1:, :]
@@ -198,7 +198,7 @@ class Trainer():
             name = f"{self.type_opt}-{self.type_cls}-{self.type_pretrained}-freeze:{self.num_freeze}-max_lr:{self.MAX_LR}-img_size:{self.img_size}"
         wandb.login(key=self.wandb_token)
         wandb.init(
-            project=self.type_seg+"4",
+            project=self.type_seg+"5",
             name=name,
             config={
                 "batch": self.batch_size,
@@ -226,27 +226,28 @@ class Trainer():
                 valid_dataset = Polyp(root_path=self.root_path, mode="test", img_size=self.img_size[0])
                 self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
             elif self.type_seg == "benchmark":
-                train_dataset = Benchmark(root_path=self.root_path, img_size=self.img_size[0], train_ratio=self.train_ratio)
+                path = "/root/quanhd/endoscopy/public_dataset.json"
+                train_dataset = Benchmark(path=path, root_path=self.root_path, img_size=self.img_size[0], train_ratio=self.train_ratio)
                 self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
                 
                 self.valid_data_loaders = {}
-                valid_dataset = Benchmark(root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="CVC-300")
+                valid_dataset = Benchmark(path=path, root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="CVC-300")
                 valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
                 self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
 
-                valid_dataset = Benchmark(root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="Kvasir")
+                valid_dataset = Benchmark(path=path, root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="Kvasir")
                 valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
                 self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
 
-                valid_dataset = Benchmark(root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="CVC-ClinicDB")
+                valid_dataset = Benchmark(path=path, root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="CVC-ClinicDB")
                 valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
                 self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
 
-                valid_dataset = Benchmark(root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="CVC-ColonDB")
+                valid_dataset = Benchmark(path=path, root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="CVC-ColonDB")
                 valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
                 self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
 
-                valid_dataset = Benchmark(root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="ETIS-LaribPolypDB")
+                valid_dataset = Benchmark(path=path, root_path=self.root_path, mode="test", img_size=self.img_size[0], ds_test="ETIS-LaribPolypDB")
                 valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False)
                 self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
 

@@ -27,7 +27,7 @@ class WeightedBCELoss(nn.Module):
         y = targets[targets != -1]
 
         # using nansum to avoid there's no record doesn't has label
-        return torch.nansum(nn.BCELoss()(x, y))
+        return torch.nansum(nn.BCEWithLogitsLoss()(x, y))
 
 
 class ConsitencyLoss(nn.Module):
@@ -130,7 +130,7 @@ class DiceBCELoss(nn.Module):
         
         intersection = (inputs * targets).sum()                            
         dice_loss = 1 - (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
-        BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
+        BCE = F.binary_cross_entropy_with_logits(inputs, targets, reduction='mean')
         Dice_BCE = torch.nansum(BCE) + torch.nansum(dice_loss)
         
         return Dice_BCE

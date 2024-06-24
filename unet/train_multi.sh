@@ -1,2 +1,2 @@
 # python main_multi.py --type_pretrained endoscopy3 --root_path "/mnt/tuyenld/data/endoscopy/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "0" --batch_size 2 --type_opt "AdamW" --type_encoder "target_encoder"
-python main_multi.py --type_pretrained endoscopy3 --root_path "/home/s/DATA/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-3 --img_size 512 --gpu "0" --batch_size 4 --type_opt "AdamW" --type_encoder "target_encoder"
+python main_multi.py --type_pretrained endoscopy_mae --root_path "/home/s/DATA/" --num_freeze 0 --max_lr 1e-6 --min_lr 2e-5 --lr 1e-4 --img_size 384 --gpu "0" --batch_size 24 --type_opt "AdamW" --type_encoder "target_encoder" --amp

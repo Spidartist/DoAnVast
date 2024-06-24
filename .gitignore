@@ -2,3 +2,4 @@ unet/logs
 unet/wandb
 unet/tmp*
 __pycache__/
+snapshots

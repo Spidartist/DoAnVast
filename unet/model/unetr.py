@@ -346,7 +346,7 @@ class UNETRMultitask(nn.Module):
         self.fc1_1 = nn.Linear(512, 10)
 
         self.fc2 = nn.Linear(768, 512)
-        self.fc2_1 = nn.Linear(512, 8)
+        self.fc2_1 = nn.Linear(512, 7)
 
         self.fc3 = nn.Linear(768, 256)
         self.fc3_1 = nn.Linear(256, 1)

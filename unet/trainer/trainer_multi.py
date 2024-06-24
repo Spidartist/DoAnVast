@@ -18,31 +18,32 @@ from torch.utils.data import DataLoader
 
 class Trainer():
     def __init__(
-            self, device, type_pretrained, json_path,
+            self, device, type_pretrained, json_path, amp,
             root_path, wandb_token,  min_lr=2e-4, ref_lr=1e-3,
             num_freeze=10, max_lr=1e-6, img_size=256, type_opt="Adam", batch_size=16, accum_iter=16,
-            type_encoder="target_encoder", train_ratio=1.0, scale_lr=1, metadata_file="/mnt/quanhd/DoAn/unet/dataset/data_dir_endounet.json"
+            type_encoder="target_encoder", train_ratio=1.0, scale_lr=1, metadata_file="/root/quanhd/DoAn/unet/dataset/data_dir_endounet.json",
         ):
         self.device = device
         self.type_pretrained = type_pretrained
         self.metadata_file = metadata_file
         self.json_path = json_path
-        self.root_path = root_path
+        self.root_path = "/root/quanhd/DATA"
         self.num_freeze= num_freeze
         self.wandb_token = wandb_token
         self.accum_iter = accum_iter
         self.type_encoder = type_encoder
         self.MIN_LR = min_lr
+        self.amp = amp
         self.train_ratio = train_ratio
         self.BASE_LR = ref_lr
         self.type_opt = type_opt
         self.MAX_LR = max_lr
         self.img_size = (img_size, img_size)
         self.batch_size = batch_size
-        self.epoch_num = 60
+        self.epoch_num = 20
         self.save_freq = 1
         self.save_path = "/logs/"
-        self.warmup_epochs = 6
+        self.warmup_epochs = 2
         self.global_step = 0
         self.scale_lr = True if scale_lr == 1 else False
 
@@ -70,6 +71,9 @@ class Trainer():
         self.seg_loss = DiceBCELoss().to(self.device)
         self.cls_loss = WeightedPosCELoss().to(self.device)
         self.bi_cls_loss = WeightedBCELoss().to(self.device)
+        if self.amp:
+            print("AMP!!!")
+            self.scaler = torch.cuda.amp.GradScaler(init_scale=2**14, enabled=self.amp)
 
     def init_score(self):
         self.dice_score = DiceScore().to(self.device)
@@ -84,7 +88,7 @@ class Trainer():
     def init_model(self):
         if self.type_pretrained == "resnet":
             print("EndoUnet")
-            self.net = Unet(classes=1, position_classes=10, damage_classes=8, backbone_name='resnet50', pretrained=True)
+            self.net = Unet(classes=1, position_classes=10, damage_classes=7, backbone_name='resnet50', pretrained=True)
             self.net.to(self.device)
         else:
             if self.type_pretrained == "endoscopy":
@@ -120,7 +124,7 @@ class Trainer():
             elif self.type_pretrained == "endoscopy_mae":
                 encoder = vit_base(img_size=[224])
                 print(self.type_pretrained)
-                pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
+                pth = "/root/quanhd/ijepa_endoscopy_pretrained/jepa_continue_mae-ep400.pth.tar"
                 ckpt = torch.load(pth)
                 print(f"loaded from {pth} at epoch {ckpt['epoch']}")
                 encoder.load_state_dict(ckpt[self.type_encoder])
@@ -204,12 +208,12 @@ class Trainer():
         self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
         valid_dataset = Multitask(metadata_file=self.metadata_file, img_size=self.img_size, segmentation_classes=5, mode="test", root_path=self.root_path)
-        self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=self.batch_size, shuffle=False, drop_last=True)
+        self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=32, shuffle=False, drop_last=True)
 
     def run(self):
         for epoch in range(self.epoch_num):
             train_epoch_loss, train_head_lr, train_epoch_pos_loss, \
-            train_epoch_dmg_loss, train_epoch_hp_loss, train_epoch_seg_loss = self.train_one_epoch()
+            train_epoch_dmg_loss, train_epoch_hp_loss, train_epoch_seg_loss = self.train_one_epoch(epoch)
 
             wandb.log({
                 "train_epoch_loss": train_epoch_loss,
@@ -261,7 +265,7 @@ class Trainer():
                 step=epoch
             )
 
-    def train_one_epoch(self):
+    def train_one_epoch(self, epoch):
         steps_per_epoch = len(self.train_data_loader)
         self.net.train()
         epoch_loss = AverageMeter()
@@ -282,17 +286,15 @@ class Trainer():
             damage_label = damage_label.to(self.device)
             segment_weight = segment_weight.to(self.device)
             hp_label = hp_label.float().to(self.device)
-            
-            pos_out, dmg_out, hp_out, seg_out = self.net(img)
+            with torch.cuda.amp.autocast(enabled=self.amp):
+                pos_out, dmg_out, hp_out, seg_out = self.net(img)
 
-            loss1 = self.cls_loss(pos_out, position_label)
-            loss2 = self.cls_loss(dmg_out, damage_label)
-            loss3 = self.bi_cls_loss(hp_out, hp_label)   
-            loss4 = self.seg_loss(seg_out, mask, segment_weight)
+                loss1 = self.cls_loss(pos_out, position_label)
+                loss2 = self.cls_loss(dmg_out, damage_label)
+                loss3 = self.bi_cls_loss(hp_out, hp_label)   
+                loss4 = self.seg_loss(seg_out, mask, segment_weight)
 
-            loss = loss1 + loss2 + loss3 + loss4
-
-            loss = loss / self.accum_iter
+                loss = loss1 + loss2 + loss3 + loss4
 
             epoch_pos_loss.update(loss1.item())
             epoch_dmg_loss.update(loss2.item())
@@ -300,14 +302,35 @@ class Trainer():
             epoch_seg_loss.update(loss4.item())
             epoch_loss.update(loss.item())
 
-            loss.backward()
 
-            if ((batch_idx + 1) % self.accum_iter == 0) or (batch_idx + 1 == len(tk0)):
-                self.lr_scheduler.step()
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-
+            if self.amp:
+                self.scaler.scale(loss).backward()
+                if ((batch_idx + 1) % self.accum_iter == 0) or (batch_idx + 1 == len(tk0)):
+                    self.lr_scheduler.step()
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.net.parameters(), 0.1)
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                    self.optimizer.zero_grad()
+            else:
+                loss = loss / self.accum_iter
+                loss.backward()
+                if ((batch_idx + 1) % self.accum_iter == 0) or (batch_idx + 1 == len(tk0)):
+                    self.lr_scheduler.step()
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
+            # break
             self.global_step += 1
+        
+        ckpt_path = "/root/quanhd/DoAn/unet" + f'/snapshots/{epoch}.pth'
+        print('[Saving Checkpoint:]', ckpt_path)
+        checkpoint = {
+            'epoch': epoch + 1,
+            'state_dict': self.net.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'scheduler': self.lr_scheduler._step
+        }
+        torch.save(checkpoint, ckpt_path)
 
         return epoch_loss.avg, self.optimizer.param_groups[1]["lr"], epoch_pos_loss.avg, \
         epoch_dmg_loss.avg, epoch_hp_loss.avg, epoch_seg_loss.avg
@@ -329,7 +352,7 @@ class Trainer():
         epoch_micro_macro_viem_loet_hoanh_ta_trang_20230620 = MicroMacroMeter(self.device, dmg_label=3)
         epoch_micro_macro_ung_thu_da_day_20230620 = MicroMacroMeter(self.device, dmg_label=4)
         epoch_micro_macro_viem_da_day_20230620 = MicroMacroMeter(self.device, dmg_label=5)
-        epoch_micro_macro_polyp = MicroMacroMeter(self.device, dmg_label=7)
+        epoch_micro_macro_polyp = MicroMacroMeter(self.device, dmg_label=6)
 
         # total_pos: total number of records that have position label
         total_pos_correct = 0
@@ -343,7 +366,7 @@ class Trainer():
         total_hp_correct = 0
         total_hp = 0
 
-        ConfMatGen = ConfMatObj()
+        ConfMatGen = ConfMatObj(self.device)
 
         tk0 = tqdm(self.valid_data_loader, total=steps_per_epoch)
         with torch.no_grad():
@@ -394,6 +417,7 @@ class Trainer():
                 epoch_micro_macro_ung_thu_da_day_20230620.update(seg_out, mask, segment_weight, damage_label)
                 epoch_micro_macro_viem_da_day_20230620.update(seg_out, mask, segment_weight, damage_label)
                 epoch_micro_macro_polyp.update(seg_out, mask, segment_weight, damage_label)
+                # break
 
 
             epoch_pos_acc = np.nan if total_pos == 0 else total_pos_correct/total_pos

@@ -5,6 +5,9 @@ from score.score import MicroMacroDiceIoUMultitask
 import numpy as np
 import matplotlib.pyplot as plt
 from torchmetrics.classification import ConfusionMatrix
+import io
+import cv2
+
 
 def load_state_dict_wo_module(state_dict):
     new_state_dict = OrderedDict()
@@ -14,9 +17,10 @@ def load_state_dict_wo_module(state_dict):
     return new_state_dict
 
 class ConfMatObj:
-    def __init__(self):
+    def __init__(self, device):
         self.pred = {}
         self.gt = {}
+        self.device = device
         self.key_lst = ["pos", "dmg", "hp"]
     def add(self, pos_out, dmg_out, hp_out, pos_label, dmg_label, hp_label):
         for k, out, label in zip(self.key_lst, [pos_out, dmg_out, hp_out], [pos_label, dmg_label, hp_label]):
@@ -34,19 +38,19 @@ class ConfMatObj:
     def ret_confmat(self, k):
         if k == "pos":
             class_names = ["Hầu họng", "Thực quản", "Tam vị", "Thân vị", "Phình vị", "Hang vị", "Bờ cong lớn", "Bờ cong nhỏ", "Hành tá tràng", "Tá tràng"]
-            confmat = ConfusionMatrix(task="multiclass", num_classes=10)
+            confmat = ConfusionMatrix(task="multiclass", num_classes=10).to(self.device)
             pred = self.pred[k]
-            gts = self.gts[k]
+            gts = self.gt[k]
         elif k == "dmg":
-            class_names = ["VTGP", "UTTQ", "VTQ", "VLHTT", "UTDD", "VDD", "HP", "POLYP"]
-            confmat = ConfusionMatrix(task="multiclass", num_classes=8)
+            class_names = ["VTGP", "UTTQ", "VTQ", "VLHTT", "UTDD", "VDD/HP", "POLYP"]
+            confmat = ConfusionMatrix(task="multiclass", num_classes=7).to(self.device)
             pred = self.pred[k]
-            gts = self.gts[k]
+            gts = self.gt[k]
         elif k == "hp":
             class_names = ["Lành tính", "Ác tính"]
-            confmat = ConfusionMatrix(task="binary", num_classes=2)
+            confmat = ConfusionMatrix(task="binary", num_classes=2).to(self.device)
             pred = self.pred[k]
-            gts = self.gts[k]
+            gts = self.gt[k]
         confusion_matrix = confmat(pred, gts)
         conf_img = plot_confusion_matrix(confusion_matrix, class_names, normalize=True)
 

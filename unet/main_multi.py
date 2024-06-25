@@ -21,6 +21,7 @@ def parse_args():
     parser.add_argument('--batch_size', help='batch size', default=16, type=int)
     parser.add_argument('--accum_iter', help='accum_iter', default=16, type=int)
     parser.add_argument('--scale_lr', help='scale_lr', default=1, type=int)
+    parser.add_argument('--continue_ckpt', help='continue_ckpt', default="", type=str)
     parser.add_argument(
         '--amp',
         action='store_true',
@@ -46,7 +47,7 @@ def run():
                 json_path=args.json_path, root_path=args.root_path, wandb_token=WANDB_TOKEN,
                 num_freeze=args.num_freeze, max_lr=args.max_lr, ref_lr=args.lr, min_lr=args.min_lr, \
                 img_size=args.img_size, type_opt=args.type_opt, batch_size=args.batch_size, accum_iter=args.accum_iter, type_encoder=args.type_encoder,
-                train_ratio=args.train_ratio, scale_lr=args.scale_lr, amp=args.amp)
+                train_ratio=args.train_ratio, scale_lr=args.scale_lr, amp=args.amp, continue_ckpt=args.continue_ckpt)
     
     trainer.run()
 

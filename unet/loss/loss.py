@@ -23,7 +23,9 @@ class WeightedBCELoss(nn.Module):
         super().__init__()
 
     def forward(self, inputs, targets):        
-        x = torch.sigmoid(torch.flatten(inputs[targets != -1]))
+        # x = torch.sigmoid(torch.flatten(inputs[targets != -1]))
+        x = torch.flatten(inputs[targets != -1])
+
         y = targets[targets != -1]
 
         # using nansum to avoid there's no record doesn't has label
@@ -117,20 +119,22 @@ class DiceBCELoss(nn.Module):
     def forward(self, inputs, targets, seg_weight, smooth=1e-15):
         # print(inputs.size(), targets.size())
         #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = torch.sigmoid(inputs)       
-
         new_inputs = inputs[seg_weight != 0]
         new_targets = targets[seg_weight != 0]
         
+        logit_inputs = new_inputs
+        inputs = torch.sigmoid(new_inputs)       
+
         #flatten label and prediction tensors
         # inputs = inputs.view(-1)
         # targets = targets.view(-1)
-        inputs = torch.flatten(new_inputs)
+        inputs = torch.flatten(inputs)
+        logit_inputs = torch.flatten(logit_inputs)
         targets = torch.flatten(new_targets.float())
         
         intersection = (inputs * targets).sum()                            
         dice_loss = 1 - (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
-        BCE = F.binary_cross_entropy_with_logits(inputs, targets, reduction='mean')
+        BCE = F.binary_cross_entropy_with_logits(logit_inputs, targets, reduction='mean')
         Dice_BCE = torch.nansum(BCE) + torch.nansum(dice_loss)
         
         return Dice_BCE

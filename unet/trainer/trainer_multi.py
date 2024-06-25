@@ -22,12 +22,14 @@ class Trainer():
             root_path, wandb_token,  min_lr=2e-4, ref_lr=1e-3,
             num_freeze=10, max_lr=1e-6, img_size=256, type_opt="Adam", batch_size=16, accum_iter=16,
             type_encoder="target_encoder", train_ratio=1.0, scale_lr=1, metadata_file="/root/quanhd/DoAn/unet/dataset/data_dir_endounet.json",
+            continue_ckpt=""
         ):
         self.device = device
         self.type_pretrained = type_pretrained
         self.metadata_file = metadata_file
         self.json_path = json_path
         self.root_path = "/root/quanhd/DATA"
+        self.continue_ckpt = continue_ckpt
         self.num_freeze= num_freeze
         self.wandb_token = wandb_token
         self.accum_iter = accum_iter
@@ -54,6 +56,19 @@ class Trainer():
         self.init_optim()
         self.init_logger()
         self.display_info()
+        if self.continue_ckpt != "":
+            self.load_continue_ckpt()
+    
+    def load_continue_ckpt(self):
+        ckpt = torch.load("/root/quanhd/DoAn/unet/snapshots_endoscopy_mae/12.pth")
+        self.net.load_state_dict(ckpt["state_dict"])
+        self.optimizer.load_state_dict(ckpt["optimizer"])
+        for i in range(ckpt["scheduler"]):
+            print(i)
+            self.lr_scheduler.step()
+
+        
+
 
     def display_info(self):
         print('epoch            : %d' % self.epoch_num)
@@ -217,7 +232,7 @@ class Trainer():
 
             wandb.log({
                 "train_epoch_loss": train_epoch_loss,
-                "train_head_lr": train_head_lr,
+                "train_backbone_lr": train_head_lr,
                 "train_epoch_pos_loss": train_epoch_pos_loss,
                 "train_epoch_dmg_loss": train_epoch_dmg_loss,
                 "train_epoch_hp_loss": train_epoch_hp_loss,
@@ -322,17 +337,18 @@ class Trainer():
             # break
             self.global_step += 1
         
-        ckpt_path = "/root/quanhd/DoAn/unet" + f'/snapshots/{epoch}.pth'
-        print('[Saving Checkpoint:]', ckpt_path)
-        checkpoint = {
-            'epoch': epoch + 1,
-            'state_dict': self.net.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-            'scheduler': self.lr_scheduler._step
-        }
-        torch.save(checkpoint, ckpt_path)
+        if (epoch + 1) % 2 == 0:
+            ckpt_path = "/root/quanhd/DoAn/unet" + f'/snapshots_{self.type_pretrained}/{epoch+1}.pth'
+            print('[Saving Checkpoint:]', ckpt_path)
+            checkpoint = {
+                'epoch': epoch + 1,
+                'state_dict': self.net.state_dict(),
+                'optimizer': self.optimizer.state_dict(),
+                'scheduler': self.lr_scheduler._step
+            }
+            torch.save(checkpoint, ckpt_path)
 
-        return epoch_loss.avg, self.optimizer.param_groups[1]["lr"], epoch_pos_loss.avg, \
+        return epoch_loss.avg, self.optimizer.param_groups[0]["lr"], epoch_pos_loss.avg, \
         epoch_dmg_loss.avg, epoch_hp_loss.avg, epoch_seg_loss.avg
 
 

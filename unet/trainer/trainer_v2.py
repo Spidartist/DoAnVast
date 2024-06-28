@@ -1,14 +1,14 @@
 import wandb
 from dataset.Multitask import Multitask
 from loss.loss import DiceBCELoss, WeightedPosCELoss, WeightedBCELoss, structure_loss
-from score.score import DiceScore, IoUScore, MicroMacroDiceIoUMultitask
+from score.score import DiceScore, IoUScore, MicroMacroDiceIoU
 from model.vit import vit_base, vit_huge
 from model.RaBiT import RaBiTSegmentor
 from dataset.Benchmark import Benchmark
 from dataset.TonThuong import TonThuong
 from dataset.Polyp import Polyp
 from model.utils import Feature2Pyramid
-from utils.helper import load_state_dict_wo_module, AverageMeter, MicroMacroMeter, GetItem, GetItemBinary, ConfMatObj
+from utils.helper import load_state_dict_wo_module, AverageMeter, ScoreAverageMeter, GetItem, GetItemBinary
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -79,7 +79,7 @@ class Trainer():
         self.recall = None
         self.f1_score = None
         self.iou_score = IoUScore().to(self.device)
-        self.dice_IoU = MicroMacroDiceIoUMultitask().to(self.device)
+        self.dice_IoU = MicroMacroDiceIoU().to(self.device)
         self.get_item = GetItem()
         self.get_item_binary = GetItemBinary()
 
@@ -171,7 +171,7 @@ class Trainer():
         name = f"{self.type_encoder}-{self.type_pretrained}-freeze:{self.num_freeze}-init_lr:{self.init_lr}-img_size:{self.img_size}-train_ratio:{self.train_ratio}"
         wandb.login(key=self.wandb_token)
         wandb.init(
-            project="Multitask1",
+            project="benchmark_rabit",
             name=name,
             config={
                 "batch": self.batch_size,
@@ -222,63 +222,47 @@ class Trainer():
             self.valid_data_loaders[valid_dataset.ds_test] = valid_data_loader
     def run(self):
         for epoch in range(self.epoch_num):
-            train_epoch_loss, train_head_lr, train_epoch_seg_loss = self.train_one_epoch(epoch)
+            train_epoch_loss, train_head_lr = self.train_one_epoch(epoch)
 
             wandb.log({
                 "train_epoch_loss": train_epoch_loss,
                 "train_backbone_lr": train_head_lr,
-                "train_epoch_seg_loss": train_epoch_seg_loss,
             }, step=epoch)
 
-            val_epoch_loss, val_epoch_pos_loss, val_epoch_dmg_loss, val_epoch_hp_loss, \
-            val_epoch_seg_loss, val_epoch_pos_acc, val_epoch_dmg_acc, val_epoch_hp_acc, \
-            val_epoch_micro_macro_ung_thu_thuc_quan, \
-            val_epoch_micro_macro_viem_thuc_quan, \
-            val_epoch_micro_macro_viem_loet_hoanh_ta_trang, \
-            val_epoch_micro_macro_ung_thu_da_day, \
-            val_epoch_micro_macro_viem_da_day, \
-            val_epoch_micro_macro_polyp, \
-            conf_img_pos, conf_img_dmg, conf_img_hp = self.valid_one_epoch()
+            if self.type_seg != "benchmark":
+                valid_epoch_loss, micro_dice_score, micro_iou_score, macro_dice_score, macro_iou_score, vis_image = self.valid_one_epoch()
+                wandb.log(
+                    {
+                        "valid_loss": valid_epoch_loss,
+                        "valid_micro_dice_score": micro_dice_score,
+                        "valid_micro_iou_score": micro_iou_score,
+                        "valid_macro_dice_score": macro_dice_score,
+                        "valid_macro_iou_score": macro_iou_score,
+                        "valid_image_visualize": vis_image
+                    },
+                    step=epoch
+                )
+            else:
+                for type_test_ds in self.valid_data_loaders:
+                    self.valid_data_loader = self.valid_data_loaders[type_test_ds]
+                    valid_epoch_loss, micro_dice_score, micro_iou_score, macro_dice_score, macro_iou_score, vis_image = self.valid_one_epoch()
 
-            wandb.log(
-                {
-                    "conf_img_pos": conf_img_pos,
-                    "conf_img_dmg": conf_img_dmg,
-                    "conf_img_hp": conf_img_hp,
-                    "valid_loss": val_epoch_loss,
-                    "val_epoch_macro_dice_ung_thu_thuc_quan": val_epoch_micro_macro_ung_thu_thuc_quan[3],
-                    "val_epoch_micro_dice_ung_thu_thuc_quan": val_epoch_micro_macro_ung_thu_thuc_quan[1],
-                    "val_epoch_macro_dice_viem_thuc_quan": val_epoch_micro_macro_viem_thuc_quan[3],
-                    "val_epoch_micro_dice_viem_thuc_quan": val_epoch_micro_macro_viem_thuc_quan[1],
-                    "val_epoch_macro_dice_viem_loet_hoanh_ta_trang": val_epoch_micro_macro_viem_loet_hoanh_ta_trang[3],
-                    "val_epoch_micro_dice_viem_loet_hoanh_ta_trang": val_epoch_micro_macro_viem_loet_hoanh_ta_trang[1],
-                    "val_epoch_macro_dice_ung_thu_da_day": val_epoch_micro_macro_ung_thu_da_day[3],
-                    "val_epoch_micro_dice_ung_thu_da_day": val_epoch_micro_macro_ung_thu_da_day[1],
-                    "val_epoch_macro_dice_viem_da_day": val_epoch_micro_macro_viem_da_day[3],
-                    "val_epoch_micro_dice_viem_da_day": val_epoch_micro_macro_viem_da_day[1],
-                    "val_epoch_macro_dice_polyp": val_epoch_micro_macro_polyp[3],
-                    "val_epoch_micro_dice_polyp": val_epoch_micro_macro_polyp[1],
-                    "val_epoch_pos_loss": val_epoch_pos_loss,
-                    "val_epoch_dmg_loss": val_epoch_dmg_loss,
-                    "val_epoch_hp_loss": val_epoch_hp_loss,
-                    "val_epoch_seg_loss": val_epoch_seg_loss,
-                    "val_epoch_pos_acc": val_epoch_pos_acc,
-                    "val_epoch_dmg_acc": val_epoch_dmg_acc,
-                    "val_epoch_hp_acc": val_epoch_hp_acc,
-                },
-                step=epoch
-            )
+                    wandb.log(
+                        {
+                            f"{type_test_ds}_valid_loss": valid_epoch_loss,
+                            f"{type_test_ds}_valid_micro_dice_score": micro_dice_score,
+                            f"{type_test_ds}_valid_micro_iou_score": micro_iou_score,
+                            f"{type_test_ds}_valid_macro_dice_score": macro_dice_score,
+                            f"{type_test_ds}_valid_macro_iou_score": macro_iou_score,
+                            f"{type_test_ds}_valid_image_visualize": vis_image
+                        },
+                        step=epoch
+                    )
 
     def train_one_epoch(self, epoch):
         steps_per_epoch = len(self.train_data_loader)
         self.net.train()
         epoch_loss = AverageMeter()
-
-        epoch_seg_loss = AverageMeter()
-
-        epoch_pos_loss = AverageMeter()
-        epoch_dmg_loss = AverageMeter()
-        epoch_hp_loss = AverageMeter()
 
         with torch.autograd.set_detect_anomaly(True):
             self.optimizer.zero_grad()
@@ -289,25 +273,20 @@ class Trainer():
                 else:
                     self.lr_scheduler.step()
 
-                img, mask, position_label, damage_label, segment_weight, hp_label = data
+                img, mask = data
                 
                 img = img.float().to(self.device)
                 mask = mask.float().to(self.device)
-                position_label = position_label.to(self.device)
-                damage_label = damage_label.to(self.device)
-                segment_weight = segment_weight.to(self.device)
-                hp_label = hp_label.float().to(self.device)
                 with torch.cuda.amp.autocast(enabled=self.amp):
                     output = self.net(img)
-                    seg_loss1 = structure_loss(output["map"][0], mask, segment_weight)
-                    seg_loss2 = structure_loss(output["map"][1], mask, segment_weight)
-                    seg_loss3 = structure_loss(output["map"][2], mask, segment_weight)
-                    seg_loss4 = structure_loss(output["map"][3], mask, segment_weight)
+                    seg_loss1 = structure_loss(output["map"][0], mask)
+                    seg_loss2 = structure_loss(output["map"][1], mask)
+                    seg_loss3 = structure_loss(output["map"][2], mask)
+                    seg_loss4 = structure_loss(output["map"][3], mask)
                     seg_loss = seg_loss1 + seg_loss2 + seg_loss3 + seg_loss4
 
                     loss = seg_loss
 
-                epoch_seg_loss.update(seg_loss.item())
                 epoch_loss.update(loss.item())
 
 
@@ -341,7 +320,7 @@ class Trainer():
             #     }
             #     torch.save(checkpoint, ckpt_path)
 
-        return epoch_loss.avg, self.optimizer.param_groups[0]["lr"], epoch_seg_loss.avg
+        return epoch_loss.avg, self.optimizer.param_groups[0]["lr"]
 
 
     def valid_one_epoch(self):
@@ -349,105 +328,61 @@ class Trainer():
         self.net.eval()
         epoch_loss = AverageMeter()
 
-        epoch_seg_loss = AverageMeter()
+        epoch_dice_score = ScoreAverageMeter(self.device)
+        epoch_iou_score = ScoreAverageMeter(self.device)
+        epoch_intersection = ScoreAverageMeter(self.device)
+        epoch_union = ScoreAverageMeter(self.device)
+        epoch_intersection2 = ScoreAverageMeter(self.device)
+        epoch_total_area = ScoreAverageMeter(self.device)
 
-        epoch_pos_loss = AverageMeter()
-        epoch_dmg_loss = AverageMeter()
-        epoch_hp_loss = AverageMeter()
-
-        epoch_micro_macro_ung_thu_thuc_quan_20230620 = MicroMacroMeter(self.device, dmg_label=1)
-        epoch_micro_macro_viem_thuc_quan_20230620 = MicroMacroMeter(self.device, dmg_label=2)
-        epoch_micro_macro_viem_loet_hoanh_ta_trang_20230620 = MicroMacroMeter(self.device, dmg_label=3)
-        epoch_micro_macro_ung_thu_da_day_20230620 = MicroMacroMeter(self.device, dmg_label=4)
-        epoch_micro_macro_viem_da_day_20230620 = MicroMacroMeter(self.device, dmg_label=5)
-        epoch_micro_macro_polyp = MicroMacroMeter(self.device, dmg_label=6)
-
-        # total_pos: total number of records that have position label
-        total_pos_correct = 0
-        total_pos = 0
-
-        # total_dmg: total number of records that have damage label
-        total_dmg_correct = 0
-        total_dmg = 0
-
-        # total_hp: total number of records that have hp label
-        total_hp_correct = 0
-        total_hp = 0
-
-        ConfMatGen = ConfMatObj(self.device)
+        vis_image = None
 
         tk0 = tqdm(self.valid_data_loader, total=steps_per_epoch)
         with torch.no_grad():
             for data in tk0:
-                img, mask, position_label, damage_label, segment_weight, hp_label = data
-
-                num_records_have_pos = (position_label != -1).sum().item()
-                total_pos += num_records_have_pos
-
-                num_records_have_dmg = (damage_label != -1).sum().item()
-                total_dmg += num_records_have_dmg
-
-                num_records_have_hp = (hp_label != -1).sum().item()
-                total_hp += num_records_have_hp
+                img, mask = data
 
                 img = img.float().to(self.device)
                 mask = mask.float().to(self.device)
-                position_label = position_label.to(self.device)
-                damage_label = damage_label.to(self.device)
-                segment_weight = segment_weight.to(self.device)
-                hp_label = hp_label.float().to(self.device)
 
                 output = self.net(img)
 
-                total_pos_correct += self.get_item(output["pos"], position_label)
-                total_dmg_correct += self.get_item(output["type"], damage_label)
-                total_hp_correct += self.get_item_binary(output["hp"], hp_label)
-                ConfMatGen.add(output["pos"], output["type"], output["hp"], position_label, damage_label, hp_label)
-
-                seg_loss1 = structure_loss(output["map"][0], mask, segment_weight)
-                seg_loss2 = structure_loss(output["map"][1], mask, segment_weight)
-                seg_loss3 = structure_loss(output["map"][2], mask, segment_weight)
-                seg_loss4 = structure_loss(output["map"][3], mask, segment_weight)
+                seg_loss1 = structure_loss(output["map"][0], mask)
+                seg_loss2 = structure_loss(output["map"][1], mask)
+                seg_loss3 = structure_loss(output["map"][2], mask)
+                seg_loss4 = structure_loss(output["map"][3], mask)
                 seg_loss = seg_loss1 + seg_loss2 + seg_loss3 + seg_loss4
 
                 loss = seg_loss
 
                 loss = loss / self.accum_iter
 
-                epoch_seg_loss.update(seg_loss.item())
                 epoch_loss.update(loss.item())
+                seg_out = output["map"][0]
+                iou, dice, intersection, union, intersection2, total_area = self.dice_IoU(seg_out, mask)
+                epoch_iou_score.update(iou.to(self.device))
+                epoch_dice_score.update(dice.to(self.device))
+                epoch_intersection.update(intersection.to(self.device))
+                epoch_union.update(union.to(self.device))
+                epoch_intersection2.update(intersection2.to(self.device))
+                epoch_total_area.update(total_area.to(self.device))
 
-                # print(output["map"][0].shape)
+                seg_img = seg_out[0]
+                seg_img[seg_img <= 0.5] = 0
+                seg_img[seg_img > 0.5] = 1
 
-                epoch_micro_macro_ung_thu_thuc_quan_20230620.update(output["map"][0], mask, segment_weight, damage_label)
-                epoch_micro_macro_viem_thuc_quan_20230620.update(output["map"][0], mask, segment_weight, damage_label)
-                epoch_micro_macro_viem_loet_hoanh_ta_trang_20230620.update(output["map"][0], mask, segment_weight, damage_label)
-                epoch_micro_macro_ung_thu_da_day_20230620.update(output["map"][0], mask, segment_weight, damage_label)
-                epoch_micro_macro_viem_da_day_20230620.update(output["map"][0], mask, segment_weight, damage_label)
-                epoch_micro_macro_polyp.update(output["map"][0], mask, segment_weight, damage_label)
+                images = torch.cat([seg_img, mask[0]], dim=1)
+                images = wandb.Image(images)
+                vis_image = images
                 # break
 
-
-            epoch_pos_acc = np.nan if total_pos == 0 else total_pos_correct/total_pos
-            epoch_dmg_acc = np.nan if total_dmg == 0 else total_dmg_correct/total_dmg 
-            epoch_hp_acc = np.nan if total_hp == 0 else total_hp_correct/total_hp
-
-            conf_img_pos = ConfMatGen.ret_confmat("pos")
-            conf_img_dmg = ConfMatGen.ret_confmat("dmg")
-            conf_img_hp = ConfMatGen.ret_confmat("hp")
-
-            conf_img_pos = wandb.Image(conf_img_pos)
-            conf_img_dmg = wandb.Image(conf_img_dmg)
-            conf_img_hp = wandb.Image(conf_img_hp)
-
-
-            return epoch_loss.avg, epoch_pos_loss.avg, epoch_dmg_loss.avg, epoch_hp_loss.avg, \
-                    epoch_seg_loss.avg, epoch_pos_acc, epoch_dmg_acc, epoch_hp_acc,\
-                    epoch_micro_macro_ung_thu_thuc_quan_20230620.ret_val(), \
-                    epoch_micro_macro_viem_thuc_quan_20230620.ret_val(), \
-                    epoch_micro_macro_viem_loet_hoanh_ta_trang_20230620.ret_val(), \
-                    epoch_micro_macro_ung_thu_da_day_20230620.ret_val(), \
-                    epoch_micro_macro_viem_da_day_20230620.ret_val(), \
-                    epoch_micro_macro_polyp.ret_val(), \
-                    conf_img_pos, conf_img_dmg, conf_img_hp
+            micro_iou_score = epoch_intersection.lst_tensor.sum()/epoch_union.lst_tensor.sum()
+            micro_dice_score = epoch_intersection2.lst_tensor.sum()/epoch_total_area.lst_tensor.sum()
+            macro_iou_score = epoch_iou_score.lst_tensor.mean()
+            macro_dice_score = epoch_dice_score.lst_tensor.mean()
+            # if epoch_loss < best_epoch_loss:
+            #     print('Loss decreases from %f to %f, saving new best...' % (best_epoch_loss, epoch_loss))
+            #     best_epoch_loss = epoch_loss
+            #     torch.save(self.net.state_dict(), self.save_path + f'/model-{type}-{loai_ton_thuong}-best.pt')
+            return epoch_loss.avg, micro_dice_score, micro_iou_score, macro_dice_score, macro_iou_score, vis_image
 

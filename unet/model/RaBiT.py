@@ -17,7 +17,7 @@ class RaBiTSegmentor(nn.Module):
                  numrepeat = 4,
                  in_channels=(192, 384, 768),
                  ):
-        super(MultiTask, self).__init__()
+        super(RaBiTSegmentor, self).__init__()
         self.in_channels = in_channels
         
         self.backbone = backbone

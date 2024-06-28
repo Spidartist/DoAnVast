@@ -433,8 +433,6 @@ class Trainer():
                     epoch_loss.update(loss3.item(), n=n)
 
                     iou, dice, intersection, union, intersection2, total_area = self.dice_IoU(seg_out, mask)
-                    # print(iou)
-                    # print(intersection)
                     epoch_iou_score.update(iou.to(self.device))
                     epoch_dice_score.update(dice.to(self.device))
                     epoch_intersection.update(intersection.to(self.device))

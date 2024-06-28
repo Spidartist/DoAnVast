@@ -49,7 +49,7 @@ class Benchmark(Dataset):
                     kvasir_mask_paths.append(mask_path)
                 else:
                     clinic_mask_paths.append(mask_path)
-            print(f"Pre len(all_image_paths) =s {len(all_image_paths)}")
+            print(f"Pre len(all_image_paths) = {len(all_image_paths)}")
             print(f"Pre len(all_mask_paths) = {len(all_mask_paths)}")
             self.image_paths = kvasir_image_paths[:int(len(kvasir_image_paths)*self.train_ratio)] + clinic_image_paths[:int(len(clinic_image_paths)*self.train_ratio)]
             self.mask_paths = kvasir_mask_paths[:int(len(kvasir_mask_paths)*self.train_ratio)] + clinic_mask_paths[:int(len(clinic_mask_paths)*self.train_ratio)]
@@ -62,6 +62,20 @@ class Benchmark(Dataset):
     def aug(self, image, mask):
         if self.mode == 'train':
             t1 = A.Compose([A.Resize(self.img_size, self.img_size),])
+            # t = A.Compose([
+            #     A.RandomRotate90(),
+            #     A.Flip(),
+            #     A.HueSaturationValue(),
+            #     A.RandomBrightnessContrast(),
+            #     A.GridDistortion(),
+            #     A.MotionBlur(),
+            #     A.GaussianBlur(),
+            #     A.OneOf([
+            #         A.RandomCrop(224, 224, p=1),
+            #         A.CenterCrop(224, 224, p=1)
+            #     ], p=0.2),
+            #     A.Resize(self.img_size, self.img_size),
+            # ], p=1.0)
             resized = t1(image=image, mask=mask)
             image = resized['image']
             mask = resized['mask']

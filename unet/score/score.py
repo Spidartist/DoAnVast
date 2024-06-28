@@ -50,8 +50,8 @@ class MicroMacroDiceIoUMultitask(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(MicroMacroDiceIoUMultitask, self).__init__()
     def forward(self, inputs, targets, seg_weight: torch.Tensor, dmg_label, batch_dmg_labels: torch.Tensor, smooth=1e-6):
-        print(seg_weight)
-        print(batch_dmg_labels)
+        # print(seg_weight)
+        # print(batch_dmg_labels)
         inputs = inputs[seg_weight != 0]
         targets = targets[seg_weight != 0]
         batch_dmg_labels = batch_dmg_labels[seg_weight != 0]

@@ -308,7 +308,7 @@ class VisionTransformer(nn.Module):
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, masks=None, return_features=False, return_last=False):
+    def forward(self, x, masks=None, return_features=False, return_last=False, return_orders=False):
         if masks is not None:
             if not isinstance(masks, list):
                 masks = [masks]
@@ -343,6 +343,9 @@ class VisionTransformer(nn.Module):
             # x = self.convert_to_expected_dim(x)
 
             # return x, list_from_encoder[:3]
+            if return_orders:
+                return list_from_encoder
+
             if not return_last:
                 return list_from_encoder[3], list_from_encoder[:3]
             else:

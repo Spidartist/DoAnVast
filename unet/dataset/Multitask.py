@@ -13,7 +13,7 @@ class Multitask(Dataset):
     """
     Data loader for binary-segmentation training
     """
-    def __init__(self, root_path="/root/quanhd/DATA/", metadata_file='/root/quanhd/DoAn/unet/dataset/data_dir_endounet.json', img_size=(320, 320), segmentation_classes=5, mode="train"):
+    def __init__(self, root_path="/home/s/DATA/", metadata_file='/mnt/quanhd/test/DoAnVast/unet/dataset/data_dir_endounet.json', img_size=(320, 320), segmentation_classes=5, mode="train"):
         self.train_samples = []
         self.test_samples = []
         self.img_size = img_size
@@ -21,7 +21,7 @@ class Multitask(Dataset):
         self.segmentation_classes = segmentation_classes
         self.mode = mode
 
-        with open("/root/quanhd/endoscopy/hp.json") as f:
+        with open("/mnt/quanhd/endoscopy/hp.json") as f:
             hp_data = json.load(f)
 
         with open(metadata_file) as f:

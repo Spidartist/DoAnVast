@@ -50,7 +50,7 @@ class Feature2Pyramid(nn.Module):
     """
 
     def __init__(self,
-                 embed_dim,
+                 embed_dim=768,
                  rescales=[4, 2, 1, 0.5],
                  norm_cfg=dict(type='SyncBN', requires_grad=True)):
         super().__init__()

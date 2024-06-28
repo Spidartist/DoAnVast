@@ -19,16 +19,16 @@ from torch.utils.data import DataLoader
 class Trainer():
     def __init__(
             self, device, type_pretrained, json_path, amp,
-            root_path, wandb_token,  min_lr=2e-4, ref_lr=1e-3,
+            wandb_token,  min_lr=2e-4, ref_lr=1e-3,
             num_freeze=10, max_lr=1e-6, img_size=256, type_opt="Adam", batch_size=16, accum_iter=16,
-            type_encoder="target_encoder", train_ratio=1.0, scale_lr=1, metadata_file="/root/quanhd/DoAn/unet/dataset/data_dir_endounet.json",
-            continue_ckpt=""
+            type_encoder="target_encoder", train_ratio=1.0, scale_lr=1, metadata_file="/mnt/quanhd/test/DoAnVast/unet/dataset/data_dir_endounet.json",
+            continue_ckpt="", root_path="/mnt/tuyenld/data/endoscopy"
         ):
         self.device = device
         self.type_pretrained = type_pretrained
         self.metadata_file = metadata_file
         self.json_path = json_path
-        self.root_path = "/root/quanhd/DATA"
+        self.root_path = root_path
         self.continue_ckpt = continue_ckpt
         self.num_freeze= num_freeze
         self.wandb_token = wandb_token
@@ -139,7 +139,7 @@ class Trainer():
             elif self.type_pretrained == "endoscopy_mae":
                 encoder = vit_base(img_size=[224])
                 print(self.type_pretrained)
-                pth = "/root/quanhd/ijepa_endoscopy_pretrained/jepa_continue_mae-ep400.pth.tar"
+                pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
                 ckpt = torch.load(pth)
                 print(f"loaded from {pth} at epoch {ckpt['epoch']}")
                 encoder.load_state_dict(ckpt[self.type_encoder])

@@ -56,10 +56,10 @@ class Trainer():
         self.train_ratio = train_ratio
         self.img_size = (img_size, img_size)
         self.batch_size = batch_size
-        self.epoch_num = 20
+        self.epoch_num = 30
         self.save_freq = 1
         self.save_path = "/logs/"
-        self.warmup_epochs = 2
+        self.warmup_epochs = 3
         self.global_step = 0
 
         self.init_data_loader()

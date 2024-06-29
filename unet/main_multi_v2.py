@@ -17,6 +17,7 @@ def parse_args():
     parser.add_argument('--img_size', help='image size', default=256, type=int)
     parser.add_argument('--batch_size', help='batch size', default=16, type=int)
     parser.add_argument('--accum_iter', help='accum_iter', default=16, type=int)
+    parser.add_argument('--weight_path', help='weight_path', type=str, default="/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar")
     parser.add_argument(
         '--amp',
         action='store_true',
@@ -42,7 +43,7 @@ def run():
                 json_path=args.json_path, root_path=args.root_path, wandb_token=WANDB_TOKEN,
                 num_freeze=args.num_freeze, init_lr=args.init_lr, \
                 img_size=args.img_size, batch_size=args.batch_size, accum_iter=args.accum_iter, type_encoder=args.type_encoder,
-                train_ratio=args.train_ratio, amp=args.amp)
+                train_ratio=args.train_ratio, amp=args.amp, weight_path=args.weight_path)
     
     trainer.run()
 

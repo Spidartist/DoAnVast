@@ -13,18 +13,23 @@ class Multitask(Dataset):
     """
     Data loader for binary-segmentation training
     """
-    def __init__(self, root_path="/home/s/DATA/", metadata_file='/mnt/quanhd/test/DoAnVast/unet/dataset/data_dir_endounet.json', img_size=(320, 320), segmentation_classes=5, mode="train"):
+    def __init__(self, root_path="/home/s/DATA/", metadata_file='data_dir_endounet.json', img_size=(384, 384), segmentation_classes=5, mode="train"):
         self.train_samples = []
         self.test_samples = []
         self.img_size = img_size
+        print(self.img_size)
         self.root_path = root_path
         self.segmentation_classes = segmentation_classes
         self.mode = mode
-
-        with open("/mnt/quanhd/endoscopy/hp.json") as f:
+        script_dir = os.path.dirname(__file__)
+        print(script_dir)
+        full_hp_path = os.path.join(script_dir, "hp.json")
+        print(full_hp_path)
+        with open(full_hp_path) as f:
             hp_data = json.load(f)
 
-        with open(metadata_file) as f:
+        full_metadata_file_path = os.path.join(script_dir, metadata_file)
+        with open(full_metadata_file_path) as f:
             dirs = json.load(f)['dirs']
 
         for dir_info in dirs:
@@ -33,6 +38,7 @@ class Multitask(Dataset):
             damage_label = dir_info.get('damage_label', -1)
             seg_label = dir_info.get('segmentation_label', 0)
             location = dir_info['location']
+            location = os.path.join(script_dir, location)
             name = dir_info.get('name', '')
             type_giai_phau = dir_info.get('type_giai_phau', '')
             type_ton_thuong = dir_info.get('type_ton_thuong', '')

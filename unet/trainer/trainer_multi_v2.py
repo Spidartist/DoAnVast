@@ -35,7 +35,7 @@ def bi_cls_loss(pred, label):
 
 class Trainer():
     def __init__(
-            self, device, type_pretrained, json_path, amp,
+            self, device, type_pretrained, json_path, amp, weight_path,
             wandb_token,  init_lr=1e-4,
             num_freeze=10, img_size=256, batch_size=16, accum_iter=16,
             type_encoder="target_encoder", train_ratio=1.0, metadata_file="/mnt/quanhd/test/DoAnVast/unet/dataset/data_dir_endounet.json",
@@ -46,6 +46,7 @@ class Trainer():
         self.metadata_file = metadata_file
         self.json_path = json_path
         self.root_path = root_path
+        self.weight_path = weight_path
         self.continue_ckpt = continue_ckpt
         self.num_freeze= num_freeze
         self.wandb_token = wandb_token
@@ -56,10 +57,10 @@ class Trainer():
         self.train_ratio = train_ratio
         self.img_size = (img_size, img_size)
         self.batch_size = batch_size
-        self.epoch_num = 30
+        self.epoch_num = 20
         self.save_freq = 1
         self.save_path = "/logs/"
-        self.warmup_epochs = 3
+        self.warmup_epochs = 2
         self.global_step = 0
 
         self.init_data_loader()
@@ -132,7 +133,8 @@ class Trainer():
         elif self.type_pretrained == "endoscopy_mae":
             encoder = vit_base(img_size=[224])
             print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
+            # pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-ep400.pth.tar"
+            pth = self.weight_path
             ckpt = torch.load(pth)
             print(f"loaded from {pth} at epoch {ckpt['epoch']}")
             encoder.load_state_dict(ckpt[self.type_encoder])
@@ -147,7 +149,8 @@ class Trainer():
         elif self.type_pretrained == "endoscopy_mae1":
             encoder = vit_base(img_size=[224])
             print(self.type_pretrained)
-            pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-latest.pth.tar"
+            # pth = "/mnt/quanhd/ijepa_stable/logs_final_mae/jepa-latest.pth.tar"
+            pth = self.weight_path
             ckpt = torch.load(pth)
             print(f"loaded from {pth} at epoch {ckpt['epoch']}")
             encoder.load_state_dict(ckpt[self.type_encoder])

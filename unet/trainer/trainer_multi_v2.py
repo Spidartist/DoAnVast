@@ -201,10 +201,10 @@ class Trainer():
         )
 
     def init_data_loader(self):
-        train_dataset = Multitask(metadata_file=self.metadata_file, img_size=self.img_size, segmentation_classes=5, mode="train", root_path=self.root_path)
+        train_dataset = Multitask(img_size=self.img_size, segmentation_classes=5, mode="train", root_path=self.root_path)
         self.train_data_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
-        valid_dataset = Multitask(metadata_file=self.metadata_file, img_size=self.img_size, segmentation_classes=5, mode="test", root_path=self.root_path)
+        valid_dataset = Multitask(img_size=self.img_size, segmentation_classes=5, mode="test", root_path=self.root_path)
         self.valid_data_loader = DataLoader(dataset=valid_dataset, batch_size=32, shuffle=False, drop_last=True)
 
     def run(self):
